@@ -1,0 +1,2 @@
+- [User Profile](user_profile.md) — author background, preferences, and working style
+- [Tone Guidance](feedback_tone.md) — register and style notes from prior sessions

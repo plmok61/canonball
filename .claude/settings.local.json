@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.mythril.io)",
+      "WebFetch(domain:docs.cursor.com)",
+      "WebFetch(domain:www.squibler.io)",
+      "WebFetch(domain:composez.ai)",
+      "Bash(npm cache *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
+    ]
+  }
+}
