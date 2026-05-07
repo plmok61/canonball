@@ -45,6 +45,10 @@ project/
 
 **Session logs.** At the end of each writing session, create a file in `sessions/` (using `session-template.md`) recording decisions made, files touched, and where to pick up next time.
 
+## Writing Style
+
+Apply the rules in `memory/style_rules.md` whenever generating prose drafts or dialogue. These rules exist to prevent common AI writing patterns that make fiction feel generic. Check them before writing any prose, the same way you check `canon/characters.md` for character consistency.
+
 ## Canon File Conventions
 
 Each `canon/characters.md` entry should cover: Role, Biography, Appearance, Psychology, Motivation, and key relationships. Character bios function as worldview documents — not just who they are but how they see the world.
