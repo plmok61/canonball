@@ -2,3 +2,4 @@
 - [Tone Guidance](feedback_tone.md) — register and style notes from prior sessions
 - [Style Rules](style_rules.md) — anti-pattern rules for AI prose: forbidden words, constructions, and structural habits to avoid
 - [AI-isms Pattern Database](ai-isms.json) — full machine-readable pattern data: 47 patterns with severity ratings, examples, and per-pattern prompt instructions
+- [Common AI Names to Avoid](names_to_avoid.md) - Names that should not be used for new characters unless explicitly requested.

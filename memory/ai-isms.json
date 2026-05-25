@@ -1,11 +1,4 @@
 {
-  "metadata": {
-    "version": "1.0",
-    "last_updated": "2024",
-    "contributors": 25,
-    "total_patterns": 47,
-    "most_severe": ["em_dashes", "delve_syndrome", "not_x_but_y", "rule_of_three", "unmotivated_metaphors"]
-  },
   "ai_writing_patterns": {
     "punctuation_grammar": {
       "em_dashes": {
@@ -32,15 +25,23 @@
           "She waited... and waited... for an answer..."
         ],
         "frequency": "End of paragraphs, dramatic moments",
-        "fixes": ["Use periods", "Remove entirely", "Only for actual trailing off"],
+        "fixes": [
+          "Use periods",
+          "Remove entirely",
+          "Only for actual trailing off"
+        ],
         "prompt_instruction": "Avoid ellipses except when showing genuine interrupted speech or thought."
       },
       "smart_quotes": {
         "description": "Curly/slanted quotes instead of straight",
         "severity": 2,
-        "examples": ["Using curly quotes instead of straight quotes"],
+        "examples": [
+          "Using curly quotes instead of straight quotes"
+        ],
         "frequency": "All dialogue and quotes",
-        "fixes": ["Use straight quotes consistently"],
+        "fixes": [
+          "Use straight quotes consistently"
+        ],
         "prompt_instruction": "Use straight quotes (\") not curly quotes."
       }
     },
@@ -54,7 +55,9 @@
         ],
         "frequency": "Opening sentences, transitions",
         "why_ai_does_this": "Associated with thorough analysis in training data",
-        "fixes": ["Use 'explore', 'examine', 'look at', or remove entirely"],
+        "fixes": [
+          "Use 'explore', 'examine', 'look at', or remove entirely"
+        ],
         "prompt_instruction": "Never use the words: delve, moreover, furthermore, albeit, indeed, certainly"
       },
       "transition_addiction": {
@@ -66,7 +69,11 @@
           "Indeed, this is certainly true"
         ],
         "frequency": "Every paragraph transition",
-        "fixes": ["Remove most transitions", "Use natural flow", "Start directly with content"],
+        "fixes": [
+          "Remove most transitions",
+          "Use natural flow",
+          "Start directly with content"
+        ],
         "prompt_instruction": "Avoid transition words like moreover, furthermore, however, nevertheless. Use natural sentence flow."
       },
       "metaphor_cliches": {
@@ -80,7 +87,10 @@
           "nestled in"
         ],
         "frequency": "Every description",
-        "fixes": ["Use concrete descriptions", "Avoid metaphors unless essential"],
+        "fixes": [
+          "Use concrete descriptions",
+          "Avoid metaphors unless essential"
+        ],
         "prompt_instruction": "Avoid metaphorical clichés. Use specific, concrete descriptions instead of 'symphony of', 'tapestry of', 'testament to'."
       }
     },
@@ -94,7 +104,10 @@
           "This isn't about X, it's about Y"
         ],
         "frequency": "Multiple times per piece",
-        "fixes": ["Choose one description", "Use direct statements"],
+        "fixes": [
+          "Choose one description",
+          "Use direct statements"
+        ],
         "prompt_instruction": "Avoid 'not X, but Y' constructions. Make direct statements."
       },
       "rhetorical_qa": {
@@ -106,7 +119,10 @@
           "Why? Because it mattered."
         ],
         "frequency": "Paragraph openings and transitions",
-        "fixes": ["Choose either question OR answer", "Restructure as statement"],
+        "fixes": [
+          "Choose either question OR answer",
+          "Restructure as statement"
+        ],
         "prompt_instruction": "Don't use rhetorical questions followed by immediate answers. Choose either question or statement."
       },
       "rule_of_three": {
@@ -118,7 +134,10 @@
           "It was dark, cold, and forbidding"
         ],
         "frequency": "Every dramatic moment or description",
-        "fixes": ["Vary numbers", "Use different structures"],
+        "fixes": [
+          "Vary numbers",
+          "Use different structures"
+        ],
         "prompt_instruction": "Avoid always grouping things in threes. Vary between single items, pairs, and longer lists."
       }
     },
@@ -130,7 +149,10 @@
           "She realized three things:\n• First...\n• Second...\n• Third..."
         ],
         "frequency": "Any list or enumeration",
-        "fixes": ["Write in paragraph form", "Use narrative flow"],
+        "fixes": [
+          "Write in paragraph form",
+          "Use narrative flow"
+        ],
         "prompt_instruction": "Never use bullet points in narrative or casual writing. Write lists as natural sentences."
       },
       "section_headers": {
@@ -142,7 +164,10 @@
           "### Moving Forward"
         ],
         "frequency": "Every few paragraphs",
-        "fixes": ["Use natural transitions", "Remove headers"],
+        "fixes": [
+          "Use natural transitions",
+          "Remove headers"
+        ],
         "prompt_instruction": "Don't use section headers or break text into labeled parts. Use natural paragraph flow."
       },
       "preamble_syndrome": {
@@ -154,7 +179,10 @@
           "Let's dissect this topic"
         ],
         "frequency": "Opening sentences",
-        "fixes": ["Start directly with content", "Remove preambles"],
+        "fixes": [
+          "Start directly with content",
+          "Remove preambles"
+        ],
         "prompt_instruction": "Start directly with content. Avoid phrases like 'Let's break it down' or 'Let's dive in'."
       }
     },
@@ -167,7 +195,11 @@
           "This represents a significant advancement in our understanding"
         ],
         "frequency": "Throughout",
-        "fixes": ["Add conversational tone", "Include imperfections", "Use varied vocabulary"],
+        "fixes": [
+          "Add conversational tone",
+          "Include imperfections",
+          "Use varied vocabulary"
+        ],
         "prompt_instruction": "Write conversationally with personality. Include natural imperfections and varied sentence structures."
       },
       "emphasis_overload": {
@@ -178,7 +210,10 @@
           "She *really* **really** meant it"
         ],
         "frequency": "Multiple per paragraph",
-        "fixes": ["Use word choice for emphasis", "Limit to one per section"],
+        "fixes": [
+          "Use word choice for emphasis",
+          "Limit to one per section"
+        ],
         "prompt_instruction": "Use emphasis (bold/italics) maximum once per 500 words. Rely on word choice and structure for emphasis."
       },
       "dramatic_fragments": {
@@ -189,7 +224,10 @@
           "It was over. Finally. Completely."
         ],
         "frequency": "Climactic moments",
-        "fixes": ["Vary sentence length naturally", "Avoid forced drama"],
+        "fixes": [
+          "Vary sentence length naturally",
+          "Avoid forced drama"
+        ],
         "prompt_instruction": "Vary sentence length naturally. Avoid using fragments for dramatic effect."
       }
     },
@@ -203,7 +241,10 @@
         ],
         "frequency": "When asked to be 'descriptive'",
         "why_ai_does_this": "Attempts creativity without understanding context",
-        "fixes": ["Remove unless genuinely helpful", "Use concrete descriptions"],
+        "fixes": [
+          "Remove unless genuinely helpful",
+          "Use concrete descriptions"
+        ],
         "prompt_instruction": "Only use metaphors that genuinely clarify meaning. Prefer concrete descriptions."
       },
       "telling_not_showing": {
@@ -214,7 +255,10 @@
           "She was angry, which showed in her expression"
         ],
         "frequency": "After every action",
-        "fixes": ["Show through action", "Remove explanations"],
+        "fixes": [
+          "Show through action",
+          "Remove explanations"
+        ],
         "prompt_instruction": "Show emotions and reactions through actions and dialogue, don't explain them."
       },
       "redundant_descriptions": {
@@ -226,7 +270,10 @@
           "quick and agile"
         ],
         "frequency": "Every description",
-        "fixes": ["Choose strongest single adjective", "Remove redundancy"],
+        "fixes": [
+          "Choose strongest single adjective",
+          "Remove redundancy"
+        ],
         "prompt_instruction": "Use single, specific adjectives. Avoid redundant pairs like 'dark and brooding'."
       }
     },
@@ -241,7 +288,10 @@
           "blooming like a promise"
         ],
         "frequency": "Every romantic scene",
-        "fixes": ["Find unique gestures", "Vary physical descriptions"],
+        "fixes": [
+          "Find unique gestures",
+          "Vary physical descriptions"
+        ],
         "prompt_instruction": "Avoid clichéd romantic gestures. Create unique, specific physical interactions."
       },
       "dialogue_patterns": {
@@ -252,9 +302,44 @@
           "Self-answering questions in dialogue"
         ],
         "frequency": "Most dialogue exchanges",
-        "fixes": ["Vary dialogue structure", "Make responses less predictable"],
+        "fixes": [
+          "Vary dialogue structure",
+          "Make responses less predictable"
+        ],
         "prompt_instruction": "Write natural dialogue without repetitive patterns or self-answering questions."
       }
+    },
+    "less_x_more_y": {
+      "description": "Overuse of 'less like X and more like Y' comparisons",
+      "severity": 3,
+      "examples": [
+        "The suite felt less like HR and more like a clinic",
+        "His smile was less like reassurance and more like a warning",
+        "The room seemed less like an office and more like a waiting room"
+      ],
+      "frequency": "Occasional use is fine, but repeated use becomes noticeable and artificial",
+      "fixes": [
+        "Use direct description",
+        "Choose the stronger comparison",
+        "Let concrete details imply the contrast"
+      ],
+      "prompt_instruction": "Avoid repeated 'less like X and more like Y' constructions. Use direct, concrete description unless the contrast is genuinely necessary."
+    },
+    "the_way_simile": {
+      "description": "Overuse of 'the way someone/something does X' explanatory similes",
+      "severity": 3,
+      "examples": [
+        "She said it the way a doctor might confirm a result already visible on the scan",
+        "He smiled the way rich men smile when they know they can pay a problem to go away",
+        "He looked at her the way a teacher looks at a student who has missed the obvious"
+      ],
+      "frequency": "A few can be effective, but repeated use becomes conspicuous and overly writerly",
+      "fixes": [
+        "Use direct action or description",
+        "Let the character's behavior imply the comparison",
+        "Reserve the construction for moments where the comparison adds real precision"
+      ],
+      "prompt_instruction": "Avoid repeated 'the way X does Y' similes. Use direct, concrete description unless the comparison is especially precise and necessary."
     }
   },
   "master_prompt_instructions": {
