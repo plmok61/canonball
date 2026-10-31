@@ -13,7 +13,7 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - [ ] **Phase 6: Brainstorm sessions.** (plan to write)
 - [ ] **Phase 7: Package & release.** Mac build, README, license (plan to write)
 
-## Notes for later phases (learned in Phase 1)
+## Notes for later phases
 
 - Markdown: `@tiptap/markdown` 3.32.2 with custom raw-atom nodes for HTML comments, raw HTML and footnotes; the text escaper overrides a private `encodeTextForMarkdown` — pin `@tiptap/*` exactly before upgrading.
 - Known round-trip residuals: CRLF files come back with mixed line endings; inline HTML inside bold/italic splits the emphasis; first save normalizes syntax (e.g. `_em_` → `*em*`).
@@ -21,8 +21,9 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - Dev environment: `~/.npm` has root-owned files (fix with `sudo chown -R 501:20 ~/.npm`); the Electron binary may need `npx install-electron` after install.
 - Phase 2 (writing aids):
   - harper.js is pinned at 2.13.0 and runs in an Electron `utilityProcess` (`src/main/grammar/`), linting paragraph text with `language: 'plaintext'`.
-  - Spelling is Chromium's job. Harper's `SpellCheck` rule is off, and lints of kind `Spelling`/`Typo` are dropped. The dialect is fixed to American; a dialect setting is future work.
-  - Ignored grammar lints last for the session only, and are not saved.
+  - Spelling is Chromium's job. Harper's `SpellCheck` and `LongSentences` rules are off, and lints of kind `Spelling`/`Typo`/`Readability` are dropped. The dialect is fixed to American; a dialect setting is future work.
+  - Ignored grammar lints last until the file is closed (they are kept per editor), and are never saved.
+  - Right-click on a grammar underline that has fixes opens the grammar popover, so a misspelling inside such an underline gets Chromium's spelling menu only from words outside it (rare, since grammar spans are short). Right-click on an underline with no fixes shows the native menu.
   - The grammar popover is mouse-only; keyboard access is future work. It also isn't clamped to the viewport.
   - Harper's Node loader reads the WASM via `new URL(...).pathname`. A checkout path containing spaces (percent-encoded) would break loading. The packaged app in `/Applications` is fine.
   - Packaged check: `npm run build:unpack` works, and Harper loads from `app.asar`. Signing and notarization are Phase 7.
