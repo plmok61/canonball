@@ -3,7 +3,8 @@ import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import { loadSettings, saveSettings } from './appSettings'
-import type { AppSettings, ProjectInfo } from '../shared/types'
+import { parseLintRequest } from './grammar/grammarService'
+import type { AppSettings, GrammarLint, ProjectInfo } from '../shared/types'
 
 let currentRoot: string | null = null
 
@@ -42,7 +43,7 @@ export async function applyStoredTheme(): Promise<void> {
   nativeTheme.themeSource = (await loadSettings(settingsFile())).theme
 }
 
-export function registerIpc(): void {
+export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLint[][]> }): void {
   const parentOf = (e: Electron.IpcMainInvokeEvent): BrowserWindow | undefined =>
     BrowserWindow.fromWebContents(e.sender) ?? undefined
 
@@ -71,6 +72,9 @@ export function registerIpc(): void {
   ipcMain.handle('canonball:readDoc', (_e, relPath: string) => readDoc(requireRoot(), relPath))
   ipcMain.handle('canonball:writeDoc', (_e, root: string, relPath: string, content: string) =>
     writeDoc(requireCurrentRoot(currentRoot, root), relPath, content)
+  )
+  ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
+    grammar.lint(parseLintRequest(texts))
   )
   ipcMain.handle('canonball:getSettings', () => loadSettings(settingsFile()))
   ipcMain.handle('canonball:setSettings', (_e, patch: Partial<AppSettings>) =>

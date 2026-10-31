@@ -23,6 +23,7 @@ const api: CanonballApi = {
     ipcRenderer.invoke('canonball:writeDoc', root, relPath, content),
   getSettings: () => ipcRenderer.invoke('canonball:getSettings'),
   setSettings: (patch) => ipcRenderer.invoke('canonball:setSettings', patch),
+  lintGrammar: (texts) => ipcRenderer.invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler
   },

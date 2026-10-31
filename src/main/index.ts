@@ -1,4 +1,4 @@
-import { app, dialog, shell, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, dialog, shell, BrowserWindow, ipcMain, Menu, utilityProcess } from 'electron'
 import { join } from 'path'
 import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
@@ -6,9 +6,15 @@ import { buildMenuTemplate } from './menu'
 import { buildContextMenuTemplate } from './contextMenu'
 import { isSafeExternalUrl } from './navigation'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { createGrammarService } from './grammar/grammarService'
+import grammarWorkerPath from './grammar/grammarWorker?modulePath'
 import icon from '../../resources/icon.png?asset'
 
 let quitting = false
+
+const grammar = createGrammarService(() =>
+  utilityProcess.fork(grammarWorkerPath, [], { serviceName: 'Canonball Grammar' })
+)
 
 function createWindow(): void {
   // Create the browser window.
@@ -107,6 +113,8 @@ app.on('before-quit', () => {
   quitting = true
 })
 
+app.on('will-quit', () => grammar.dispose())
+
 app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.canonball.app')
@@ -118,7 +126,7 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpc()
+  registerIpc(grammar)
   await applyStoredTheme()
 
   Menu.setApplicationMenu(
