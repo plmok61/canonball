@@ -7,7 +7,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 ## Build phases
 
-- [ ] **Phase 3: AI permissions.** Badges, prose folders, access layer (plan to write)
 - [ ] **Phase 4: AI connection & chat.** Providers, Keychain, model picker, chat (plan to write)
 - [ ] **Phase 5: AI file tools & proposals.** Tools, Accept/Reject cards, style rules (plan to write)
 - [ ] **Phase 6: Brainstorm sessions.** (plan to write)
@@ -29,6 +28,15 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
   - Packaged check: `npm run build:unpack` works, and Harper loads from `app.asar`. Signing and notarization are Phase 7.
   - The grammar service has no request timeout. A hung Harper call would leave that request pending, though later edits still lint.
   - macOS gives some misspellings (e.g. "teh") no suggestions. That is OS dictionary behaviour.
+- Phase 3 (AI permissions):
+  - Rules live in `src/shared/access.ts`; `.canonball/project.json` is loaded and saved by `src/main/projectSettings.ts` (mutations queued per root). `src/main/aiAccess.ts` (`createAiAccess(root)`: `list`, `read`, `write`, `create`) is the only way Phase 5 AI tools may touch files. It is not wired to IPC yet.
+  - **Phase 5 rule:** an accepted AI edit must be written by main through `aiAccess.write`/`create`, and only after the writer presses Accept. The renderer's own `writeDoc` channel can write anywhere (prose and `.canonball/` included), so it must never apply AI edits.
+  - An unreadable `project.json` turns the AI off entirely (no list, read, write or create) until it is fixed; the file is never overwritten.
+  - Renaming a folder outside the app orphans its entries in `project.json` (they match nothing, so the folder falls back to 👁). No migration yet.
+  - `aiAccess` canonicalizes before checking, then writes; a symlink swapped in between by another local process could redirect a write (still inside the project). `create` through a dangling symlink into drafts is refused only by the exclusive create (`File already exists`); consider refusing symlinks in the tail segment.
+  - The renderer matches prose entries literally; main also matches their on-disk spelling. A hand-edited `"DRAFTS"` gets main's protection but no tree tag or Draft banner.
+  - Saving `project.json` drops unknown top-level keys.
+  - Prose-dialog polish left: focus drops when Done disables mid-save; Cancel stays enabled mid-save; nested folder and parent can both be ticked.
 
 ## Decide later (after using the app)
 
