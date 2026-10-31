@@ -13,6 +13,12 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 220px 1fr 290px;
+  grid-template-columns: 220px minmax(0, 1fr) 290px;
   height: 100vh;
+}
+
+.editor-empty {
+  margin: 40px 24px;
+  opacity: 0.5;
+  text-align: center;
 }

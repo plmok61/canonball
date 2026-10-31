@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { ProjectInfo } from '../../shared/types'
 import ChatPlaceholder from './chat/ChatPlaceholder'
+import { Editor } from './editor/Editor'
 
 function App(): React.JSX.Element {
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  // Task 6 wires the file tree to this.
+  const [selectedPath] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -59,7 +62,13 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <aside data-testid="tree-panel" />
-      <main data-testid="editor-panel" />
+      <main data-testid="editor-panel">
+        {selectedPath ? (
+          <Editor relPath={selectedPath} />
+        ) : (
+          <p className="editor-empty">Choose a file from the project</p>
+        )}
+      </main>
       <aside data-testid="chat-panel">
         <ChatPlaceholder />
       </aside>
