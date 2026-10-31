@@ -20,7 +20,7 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - Known round-trip residuals: CRLF files come back with mixed line endings; inline HTML inside bold/italic splits the emphasis; first save normalizes syntax (e.g. `_em_` → `*em*`).
 - `writeDoc` has no expected-mtime precondition: external changes are only detected on window focus. Add one before Phase 5 lets the AI write files.
 - Dev environment: `~/.npm` has root-owned files (fix with `sudo chown -R 501:20 ~/.npm`); the Electron binary may need `npx install-electron` after install.
-- Lint: `src/main/projectFs.ts` and its test have pre-existing eslint errors.
+- Save registry: orphaned saves are keyed by relPath only. Key them by project root + relPath so a stuck save from one project can never be adopted into the same-named file in another (practically unreachable today because the project dialogs are modal).
 
 ## Decide later (after using the app)
 
