@@ -2,6 +2,7 @@ import { Extension, type Editor } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
+import { MAX_LINT_CHARS } from '../../../shared/grammar'
 import type { GrammarLint } from '../../../shared/types'
 import { collectBlocks, toDocRange } from './blocks'
 
@@ -31,6 +32,24 @@ export const grammarKey = new PluginKey<DecorationSet>('grammar')
 
 /** The lint cache (block text → lints) is cleared once it passes this many entries. */
 const CACHE_LIMIT = 2000
+
+/** Split texts, in order, into batches of at most MAX_LINT_CHARS in total. */
+function toBatches(texts: string[]): string[][] {
+  const batches: string[][] = []
+  let current: string[] = []
+  let size = 0
+  for (const text of texts) {
+    if (current.length > 0 && size + text.length > MAX_LINT_CHARS) {
+      batches.push(current)
+      current = []
+      size = 0
+    }
+    current.push(text)
+    size += text.length
+  }
+  if (current.length > 0) batches.push(current)
+  return batches
+}
 
 function ignoreKey(lint: GrammarLint): string {
   return `${lint.problem}\0${lint.message}`
@@ -98,34 +117,53 @@ export const Grammar = Extension.create<GrammarOptions, GrammarStorage>({
           let timer: ReturnType<typeof setTimeout> | undefined
           let destroyed = false
 
+          const remember = (texts: string[], results: GrammarLint[][]): void => {
+            if (cache.size + texts.length > CACHE_LIMIT) cache.clear()
+            texts.forEach((text, i) => cache.set(text, results[i] ?? []))
+          }
+
           // Runs may overlap: a hung request must not hold up later edits, and
           // each run drops its own result if the doc has moved on.
-          const run = async (): Promise<void> => {
+          const lintAndDecorate = async (): Promise<void> => {
             const doc = view.state.doc
             const blocks = collectBlocks(doc)
             const missing = [
               ...new Set(blocks.map((b) => b.text).filter((t) => t && !cache.has(t)))
             ]
+            // Kept apart from the cache, which may be cleared mid-run.
             const fresh = new Map<string, GrammarLint[]>()
-            if (missing.length > 0) {
+            // A paragraph too long for one request is not checked.
+            const tooLong = missing.filter((t) => t.length > MAX_LINT_CHARS)
+            tooLong.forEach((text) => fresh.set(text, []))
+            remember(tooLong, [])
+            // Main rejects requests over the cap, so big files go in batches.
+            for (const batch of toBatches(missing.filter((t) => t.length <= MAX_LINT_CHARS))) {
+              if (destroyed || view.isDestroyed) return
               let results: GrammarLint[][]
               try {
-                results = await lint(missing)
+                results = await lint(batch)
               } catch (error) {
                 console.warn('Grammar check failed:', error)
                 return
               }
-              missing.forEach((text, i) => fresh.set(text, results[i] ?? []))
+              batch.forEach((text, i) => fresh.set(text, results[i] ?? []))
+              remember(batch, results)
             }
             const perBlock = blocks.map((block) => ({
               block,
-              lints: cache.get(block.text) ?? fresh.get(block.text) ?? []
+              lints: fresh.get(block.text) ?? cache.get(block.text) ?? []
             }))
-            if (cache.size + fresh.size > CACHE_LIMIT) cache.clear()
-            for (const [text, lints] of fresh) cache.set(text, lints)
 
             if (destroyed || view.isDestroyed || view.state.doc !== doc) return
             setDecorations(view, buildDecorations(doc, perBlock, storage.ignored))
+          }
+
+          const run = async (): Promise<void> => {
+            try {
+              await lintAndDecorate()
+            } catch (error) {
+              console.warn('Grammar check failed:', error)
+            }
           }
 
           const schedule = (): void => {

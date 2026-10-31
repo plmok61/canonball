@@ -2,6 +2,7 @@
 import { Editor } from '@tiptap/core'
 import { undoDepth } from '@tiptap/pm/history'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MAX_LINT_CHARS } from '../../../shared/grammar'
 import type { GrammarLint } from '../../../shared/types'
 import { createExtensions } from '../editor/extensions'
 import { loadIntoEditor } from '../editor/markdown'
@@ -207,6 +208,28 @@ describe('Grammar extension', () => {
     await new Promise((r) => setTimeout(r, 10))
     expect(decorations(ed)).toEqual([])
     expect(undoDepth(ed.state)).toBe(1)
+  })
+
+  it('lints a document larger than the request cap in batches', async () => {
+    const para = (n: number): string => `Part ${n} has the the word. ` + 'more '.repeat(16_000)
+    const lint = fakeLint()
+    const ed = load([1, 2, 3].map(para).join('\n\n') + '\n', lint)
+    await waitForDecorations(ed, 3)
+    expect(lint.mock.calls.length).toBeGreaterThanOrEqual(2)
+    for (const [texts] of lint.mock.calls) {
+      expect(texts.reduce((n, t) => n + t.length, 0)).toBeLessThanOrEqual(MAX_LINT_CHARS)
+    }
+    expect(decorations(ed).map((d) => d.text)).toEqual(['the the', 'the the', 'the the'])
+  })
+
+  it('skips a single paragraph over the cap', async () => {
+    const huge = 'the the ' + 'x'.repeat(MAX_LINT_CHARS)
+    const lint = fakeLint()
+    const ed = load(`${huge}\n\nShort the the.\n`, lint)
+    await waitForDecorations(ed, 1)
+    for (const [texts] of lint.mock.calls) expect(texts).not.toContain(huge)
+    expect(decorations(ed).map((d) => d.text)).toEqual(['the the'])
+    expect(decorations(ed)[0].from).toBeGreaterThan(MAX_LINT_CHARS)
   })
 
   it('ignores results that arrive after the editor is destroyed', async () => {

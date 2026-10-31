@@ -1,6 +1,7 @@
+import { MAX_LINT_CHARS } from '../../shared/grammar'
 import type { GrammarLint } from '../../shared/types'
 
-export const MAX_LINT_CHARS = 200_000
+export { MAX_LINT_CHARS }
 
 export function parseLintRequest(input: unknown): string[] {
   if (!Array.isArray(input)) throw new Error('Invalid grammar request')
