@@ -3,7 +3,7 @@ import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import { loadProjectAccess, setPathAccess, setProsePaths } from './projectSettings'
-import { loadSettings, saveSettings } from './appSettings'
+import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
 import type { Access, AppSettings, GrammarLint, ProjectInfo } from '../shared/types'
 
@@ -19,6 +19,11 @@ function settingsFile(): string {
   return join(app.getPath('userData'), 'settings.json')
 }
 
+let settingsStore: SettingsStore | null = null
+function settings(): SettingsStore {
+  return (settingsStore ??= createSettingsStore(settingsFile()))
+}
+
 function isAccess(a: unknown): a is Access {
   return a === 'edit' || a === 'read' || a === 'hidden'
 }
@@ -29,8 +34,7 @@ function requireRoot(): string {
 }
 
 async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-  const next = { ...(await loadSettings(settingsFile())), ...patch }
-  await saveSettings(settingsFile(), next)
+  const next = await settings().update((s) => ({ ...s, ...patch }))
   if ('theme' in patch) nativeTheme.themeSource = next.theme
   return next
 }
@@ -45,7 +49,7 @@ async function openProject(root: string): Promise<ProjectInfo> {
 
 /** Apply the stored theme to native chrome before the window shows, to avoid a flash. */
 export async function applyStoredTheme(): Promise<void> {
-  nativeTheme.themeSource = (await loadSettings(settingsFile())).theme
+  nativeTheme.themeSource = (await settings().load()).theme
 }
 
 export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLint[][]> }): void {
@@ -97,7 +101,7 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
   ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
     grammar.lint(parseLintRequest(texts))
   )
-  ipcMain.handle('canonball:getSettings', () => loadSettings(settingsFile()))
+  ipcMain.handle('canonball:getSettings', () => settings().load())
   ipcMain.handle('canonball:setSettings', (_e, patch: Partial<AppSettings>) =>
     updateSettings(patch)
   )

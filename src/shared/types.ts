@@ -1,3 +1,4 @@
+import type { ModelChoice } from './ai'
 export interface TreeNode {
   name: string
   relPath: string
@@ -22,6 +23,7 @@ export type ThemeSetting = 'light' | 'dark' | 'system'
 export interface AppSettings {
   lastProjectRoot: string | null
   theme: ThemeSetting
+  ai: { localUrl: string | null; model: ModelChoice | null }
 }
 
 export type MenuCommand = 'open-project' | 'new-project'
