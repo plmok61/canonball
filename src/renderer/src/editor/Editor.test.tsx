@@ -29,6 +29,7 @@ beforeAll(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   vi.restoreAllMocks()
 })
@@ -128,7 +129,109 @@ it('does not reload on focus when there are unsaved edits', async () => {
     editor.commands.insertContent('mine ')
   })
   api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
+  const callsBefore = api.readDoc.mock.calls.length
   fireEvent.focus(window)
-  await Promise.resolve()
+  // give any (wrongly) triggered reload time to read and apply
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20))
+  })
+  expect(api.readDoc.mock.calls.length).toBe(callsBefore)
   expect(document.querySelector('.ProseMirror')).toHaveTextContent('mine')
+  expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('new text')
+})
+
+it('does not write when an edit is undone on a file whose round trip normalizes', async () => {
+  const api = stub('_em_\n')
+  render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const end = editor.state.doc.content.size - 1
+  act(() => {
+    editor.commands.insertContentAt(end, 'x')
+  })
+  act(() => {
+    editor.commands.deleteRange({ from: end, to: end + 1 })
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(api.writeDoc).not.toHaveBeenCalled()
+})
+
+it('shows a message when the file cannot be read', async () => {
+  const api = stub()
+  api.readDoc.mockRejectedValue(new Error('boom'))
+  render(<Editor relPath="canon/a.md" />)
+  expect(await screen.findByText("Couldn't open this file: boom")).toBeInTheDocument()
+})
+
+it('shows not saved — retrying when a save fails', async () => {
+  const api = stub()
+  const editor = await (async () => {
+    render(<Editor relPath="canon/a.md" />)
+    return ready()
+  })()
+  api.writeDoc.mockRejectedValue(new Error('disk full'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(900)
+  })
+  expect(screen.getByText('not saved — retrying')).toBeInTheDocument()
+  api.writeDoc.mockResolvedValue({ content: '', mtimeMs: 3 })
+})
+
+it('retries and succeeds after a failed save', async () => {
+  const api = stub()
+  render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  api.writeDoc.mockRejectedValueOnce(new Error('disk full'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(900)
+  })
+  expect(screen.getByText('not saved — retrying')).toBeInTheDocument()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000)
+  })
+  expect(screen.getByText('saved')).toBeInTheDocument()
+  expect(api.writeDoc).toHaveBeenCalledTimes(2)
+})
+
+it('failed save on file switch is retried and flushed on quit', async () => {
+  const api = stub()
+  const { rerender } = render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  api.writeDoc.mockRejectedValueOnce(new Error('disk full'))
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  rerender(<Editor relPath="canon/b.md" />)
+  await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
+  await ready()
+  const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
+  await handler()
+  const writes = api.writeDoc.mock.calls.filter((c) => c[0] === 'canon/a.md')
+  expect(writes.length).toBe(2)
+  expect(writes[1][1]).toContain('typed')
+})
+
+it('rejects the flush request when an orphaned save still fails', async () => {
+  const api = stub()
+  const { rerender } = render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  api.writeDoc.mockRejectedValue(new Error('disk full'))
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  rerender(<Editor relPath="canon/b.md" />)
+  await ready()
+  const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
+  await expect(handler()).rejects.toThrow('disk full')
+  api.writeDoc.mockResolvedValue({ content: '', mtimeMs: 3 })
 })

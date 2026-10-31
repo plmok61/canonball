@@ -4,6 +4,10 @@ export interface AutosaveOptions {
   initial: string
   /** Called whenever `dirty` may have changed. */
   onDirtyChange?: (dirty: boolean) => void
+  /** Called when the last save attempt starts failing or recovers. */
+  onErrorChange?: (failed: boolean) => void
+  /** Wait before retrying a failed save while this instance is live. Default 2000. */
+  retryMs?: number
 }
 
 /** Debounced saver. Never saves content equal to what was last saved. */
@@ -14,6 +18,8 @@ export class Autosave {
   private timer: ReturnType<typeof setTimeout> | null = null
   private inFlight: Promise<void> | null = null
   private lastDirty = false
+  private failed = false
+  private detached = false
 
   constructor(opts: AutosaveOptions) {
     this.opts = opts
@@ -24,15 +30,26 @@ export class Autosave {
     return this.pending !== null || this.inFlight !== null
   }
 
+  get hasFailed(): boolean {
+    return this.failed
+  }
+
   change(content: string): void {
     this.clearTimer()
     if (content === this.lastSaved) {
       this.pending = null
+      this.setFailed(false)
     } else {
       this.pending = content
       this.timer = setTimeout(() => void this.flush().catch(() => {}), this.opts.delayMs)
     }
     this.notify()
+  }
+
+  /** Stop scheduling saves and retries; the owner now drives `flush()` itself. */
+  detach(): void {
+    this.detached = true
+    this.clearTimer()
   }
 
   async flush(): Promise<void> {
@@ -41,6 +58,7 @@ export class Autosave {
     while (this.inFlight || this.pending !== null) {
       if (this.inFlight) {
         await this.inFlight.catch(() => {})
+        if (this.failed && this.pending !== null) throw new Error('save failed')
         continue
       }
       const content = this.pending as string
@@ -48,10 +66,13 @@ export class Autosave {
       const run = this.opts.save(content).then(
         () => {
           this.lastSaved = content
+          this.setFailed(false)
         },
         (err) => {
-          // keep the text so the next change or flush retries it
+          // keep the text so the next change, retry or flush writes it
           this.pending ??= content
+          this.setFailed(true)
+          this.scheduleRetry()
           throw err
         }
       )
@@ -66,9 +87,20 @@ export class Autosave {
     }
   }
 
+  private scheduleRetry(): void {
+    if (this.detached || this.timer) return
+    this.timer = setTimeout(() => void this.flush().catch(() => {}), this.opts.retryMs ?? 2000)
+  }
+
   private clearTimer(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
+  }
+
+  private setFailed(failed: boolean): void {
+    if (failed === this.failed) return
+    this.failed = failed
+    this.opts.onErrorChange?.(failed)
   }
 
   private notify(): void {

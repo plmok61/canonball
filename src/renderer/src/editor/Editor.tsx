@@ -4,6 +4,7 @@ import type { Editor as TipTapEditor } from '@tiptap/core'
 import { Autosave } from './autosave'
 import { createExtensions } from './extensions'
 import { loadIntoEditor, serializeEditor, type OpenDoc } from './markdown'
+import { flushAll, orphan } from './saveRegistry'
 import { Toolbar } from './Toolbar'
 import { countWords } from './wordCount'
 import './editor.css'
@@ -27,6 +28,8 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
   const extensions = useMemo(() => createExtensions(), [])
   const [loaded, setLoaded] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const autosave = useRef<Autosave | null>(null)
   const doc = useRef<OpenDoc>({ frontMatter: null })
   const mtime = useRef(0)
@@ -36,6 +39,7 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
       delayMs: DEBOUNCE_MS,
       initial,
       onDirtyChange: setDirty,
+      onErrorChange: setFailed,
       save: async (content) => {
         const saved = await window.canonball.writeDoc(relPath, content)
         mtime.current = saved.mtimeMs
@@ -54,20 +58,25 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
   useEffect(() => {
     if (!editor) return
     let cancelled = false
-    void window.canonball.readDoc(relPath).then((file) => {
-      if (cancelled || editor.isDestroyed) return
-      doc.current = loadIntoEditor(editor, file.content)
-      mtime.current = file.mtimeMs
-      autosave.current = makeAutosave(file.content)
-      editor.setEditable(true, false)
-      setLoaded(true)
-    })
-    window.canonball.onFlushRequest(async () => {
-      await autosave.current?.flush()
-    })
+    window.canonball
+      .readDoc(relPath)
+      .then((file) => {
+        if (cancelled || editor.isDestroyed) return
+        doc.current = loadIntoEditor(editor, file.content)
+        mtime.current = file.mtimeMs
+        // Baseline is the serialized form, so edit-then-undo never rewrites a
+        // file whose round trip normalizes.
+        autosave.current = makeAutosave(serializeEditor(editor, doc.current))
+        editor.setEditable(true, false)
+        setLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e))
+      })
+    window.canonball.onFlushRequest(() => flushAll(autosave.current))
     return () => {
       cancelled = true
-      void autosave.current?.flush().catch(() => {})
+      if (autosave.current) orphan(autosave.current)
     }
     // makeAutosave closes over relPath only, which is fixed for this instance
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,7 +91,7 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
         if (file.mtimeMs === mtime.current) return
         doc.current = loadIntoEditor(editor, file.content)
         mtime.current = file.mtimeMs
-        autosave.current = makeAutosave(file.content)
+        autosave.current = makeAutosave(serializeEditor(editor, doc.current))
       })
     }
     window.addEventListener('focus', onFocus)
@@ -99,13 +108,19 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
   return (
     <div className="cb-editor">
       {editor && <Toolbar editor={editor} relPath={relPath} />}
-      <div className="cb-page-scroll">
-        <EditorContent editor={editor} className="cb-page" />
-      </div>
+      {loadError ? (
+        <p role="alert" className="cb-load-error">
+          Couldn&apos;t open this file: {loadError}
+        </p>
+      ) : (
+        <div className="cb-page-scroll">
+          <EditorContent editor={editor} className="cb-page" />
+        </div>
+      )}
       <div className="cb-status">
         <span>{relPath}</span>
         <span>{words === 1 ? '1 word' : `${words} words`}</span>
-        <span>{dirty ? 'saving…' : 'saved'}</span>
+        <span>{failed ? 'not saved — retrying' : dirty ? 'saving…' : 'saved'}</span>
       </div>
     </div>
   )
