@@ -63,6 +63,12 @@ export async function saveChat(root: string, thread: ChatThread): Promise<void> 
   if (!parsed) throw new Error('Invalid chat')
   const rel = chatRel(parsed.id)
   const dir = resolveInside(root, CHATS_REL)
+  try {
+    await readThread(root, parsed.id)
+  } catch (err) {
+    // A missing file is a new thread; anything else must not be overwritten.
+    if ((err as Error).message !== 'Chat not found') throw err
+  }
   await fsp.mkdir(dir, { recursive: true })
   try {
     // 'wx': keep any existing .gitignore as the writer left it.

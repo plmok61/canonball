@@ -76,6 +76,16 @@ describe('chat storage', () => {
     expect(fs.readFileSync(bad, 'utf8')).toBe('{oops')
   })
 
+  it('never overwrites an unreadable chat file', async () => {
+    fs.mkdirSync(chatsDir(), { recursive: true })
+    const bad = path.join(chatsDir(), `${ID_BAD}.json`)
+    fs.writeFileSync(bad, '{oops')
+    await expect(saveChat(root, thread(ID_BAD, '2026-01-02T00:00:00.000Z'))).rejects.toThrow(
+      'Chat file is unreadable'
+    )
+    expect(fs.readFileSync(bad, 'utf8')).toBe('{oops')
+  })
+
   it('reports a missing chat', async () => {
     await expect(loadChat(root, ID_A)).rejects.toThrow('Chat not found')
   })
