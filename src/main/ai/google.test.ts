@@ -79,7 +79,7 @@ describe('google', () => {
       )
     }
     const models = await google.listModels(cfg, fetchFn)
-    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models')
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000')
     expect(models).toEqual([
       { provider: 'google', model: 'gemini-a', label: 'Gemini A' },
       { provider: 'google', model: 'gemini-b', label: 'Gemini B' }

@@ -50,7 +50,7 @@ it('clear removes the key', async () => {
 
 it('rejects malformed keys', async () => {
   const s = createSecretStore(file, fake())
-  for (const k of ['', 'a b', 'a'.repeat(501)]) {
+  for (const k of ['', 'a b', 'a'.repeat(501), 'sk-abc​def', 'sk-ключ']) {
     await expect(s.set('openai', k)).rejects.toThrow("That doesn't look like an API key.")
   }
 })

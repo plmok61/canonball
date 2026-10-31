@@ -22,6 +22,23 @@ describe('errors', () => {
     )
   })
 
+  it('maps a Google 400 API_KEY_INVALID to the rejected-key copy', () => {
+    const body = JSON.stringify({
+      error: {
+        code: 400,
+        message: 'API key not valid. Please pass a valid API key.',
+        status: 'INVALID_ARGUMENT',
+        details: [{ reason: 'API_KEY_INVALID' }]
+      }
+    })
+    expect(httpError('google', 400, body).message).toBe(
+      'The Google API key was rejected. Check it in Settings.'
+    )
+    expect(httpError('google', 400, '{"error":{"message":"bad request"}}').message).toBe(
+      'Google returned an error (400): bad request'
+    )
+  })
+
   it('local network failure names the URL', () => {
     expect(
       networkError('local', new TypeError('fetch failed'), 'http://localhost:11434/v1').message

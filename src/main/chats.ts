@@ -17,8 +17,9 @@ async function readThread(root: string, id: string): Promise<ChatThread> {
   try {
     raw = await fsp.readFile(full, 'utf8')
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('Chat not found')
-    throw new Error('Chat file is unreadable')
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+      throw new Error('Chat not found', { cause: err })
+    throw new Error('Chat file is unreadable', { cause: err })
   }
   let json: unknown
   try {

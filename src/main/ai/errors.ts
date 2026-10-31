@@ -13,7 +13,8 @@ function isAbort(err: unknown): boolean {
 
 export function httpError(provider: ProviderId, status: number, body: string): ProviderError {
   const label = PROVIDER_LABEL[provider]
-  if (status === 401 || status === 403)
+  const badGoogleKey = provider === 'google' && status === 400 && body.includes('API_KEY_INVALID')
+  if (status === 401 || status === 403 || badGoogleKey)
     return new ProviderError(`The ${label} API key was rejected. Check it in Settings.`)
   if (status === 429)
     return new ProviderError(`${label} is busy or rate-limiting requests. Try again in a moment.`)

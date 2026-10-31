@@ -25,6 +25,9 @@ interface Props {
 
 const PROVIDER_ORDER: ProviderId[] = [...CLOUD_PROVIDERS, 'local']
 const NO_CONNECTION = 'Add an AI connection in Settings to start chatting.'
+const NO_REPLY = 'No reply came back. Try again or pick another model.'
+/** A Stop click this soon after Send is the second half of a double-click, not a request to stop. */
+const STOP_GRACE_MS = 300
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -66,6 +69,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
   const saveChain = useRef<Promise<void>>(Promise.resolve())
   const loadToken = useRef(0)
   const logRef = useRef<HTMLDivElement>(null)
+  const sentAt = useRef(0)
 
   const commit = (next: View): void => {
     viewRef.current = next
@@ -93,7 +97,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     })
   }
 
-  const finish = (requestId: string, failure: string | null): void => {
+  const finish = (requestId: string, failure: string | null, stopped = false): void => {
     if (activeRef.current !== requestId) return
     activeRef.current = null
     setStreaming(null)
@@ -101,10 +105,12 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     if (!thread) return
     const msgs = thread.messages
     const last = msgs[msgs.length - 1]
-    const kept = last && last.role === 'assistant' && last.content === '' ? msgs.slice(0, -1) : msgs
+    const empty = !!last && last.role === 'assistant' && last.content === ''
+    const kept = empty ? msgs.slice(0, -1) : msgs
     const done: ChatThread = { ...thread, updatedAt: new Date().toISOString(), messages: kept }
     commit({ ...viewRef.current, thread: done })
     if (failure !== null) addError(failure)
+    else if (empty && !stopped) addError(NO_REPLY)
     save(done)
   }
 
@@ -119,7 +125,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
       msgs[msgs.length - 1] = { ...last, content: last.content + e.text }
       commit({ ...viewRef.current, thread: { ...thread, messages: msgs } })
     } else if (e.kind === 'done') {
-      finish(e.requestId, null)
+      finish(e.requestId, null, e.stopped)
     } else {
       finish(e.requestId, e.message)
     }
@@ -267,6 +273,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
       thread: { ...withUser, messages: [...withUser.messages, reply] }
     })
     activeRef.current = requestId
+    sentAt.current = Date.now()
     setStreaming(requestId)
     save(withUser)
     window.canonball
@@ -276,7 +283,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
 
   const stop = (): void => {
     const id = activeRef.current
-    if (!id) return
+    if (!id || Date.now() - sentAt.current < STOP_GRACE_MS) return
     window.canonball.cancelChat(id).catch((e) => finish(id, message(e)))
   }
 
@@ -390,7 +397,9 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
           aria-label="Message"
           rows={3}
           value={input}
-          disabled={busy}
+          // Read-only, not disabled, while a reply streams, so the writer keeps focus.
+          readOnly={busy}
+          aria-busy={busy}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -400,11 +409,11 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
           }}
         />
         {busy ? (
-          <button type="button" onClick={stop}>
+          <button key="stop" type="button" onClick={stop}>
             Stop
           </button>
         ) : (
-          <button type="button" disabled={!canSend} onClick={send}>
+          <button key="send" type="button" disabled={!canSend} onClick={send}>
             Send
           </button>
         )}

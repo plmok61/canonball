@@ -13,7 +13,7 @@ function headers(cfg: ProviderConfig, json: boolean): Record<string, string> {
 
 export const google: Adapter = {
   async listModels(cfg, fetchFn) {
-    const res = await send(cfg, fetchFn, `${cfg.baseUrl}/models`, {
+    const res = await send(cfg, fetchFn, `${cfg.baseUrl}/models?pageSize=1000`, {
       method: 'GET',
       headers: headers(cfg, false)
     })

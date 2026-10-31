@@ -62,7 +62,7 @@ export function createSecretStore(file: string, enc: Encryptor): SecretStore {
     },
     set(p, key) {
       const k = key.trim()
-      if (k === '' || k.length > 500 || /\s/.test(k)) return Promise.reject(new Error(BAD_KEY))
+      if (k.length > 500 || !/^[\x21-\x7e]+$/.test(k)) return Promise.reject(new Error(BAD_KEY))
       if (!enc.isEncryptionAvailable()) return Promise.reject(new Error(NO_KEYCHAIN))
       return serialize(async () => {
         const e = await readEntries(file)

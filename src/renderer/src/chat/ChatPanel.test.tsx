@@ -80,7 +80,14 @@ function stub(
 afterEach(() => {
   cleanup()
   emit = null
+  vi.restoreAllMocks()
 })
+
+/** Moves Date.now forward, past the guard that ignores a Stop click right after Send. */
+function laterBy(ms: number): void {
+  const t = Date.now() + ms
+  vi.spyOn(Date, 'now').mockReturnValue(t)
+}
 
 function savedThreads(api: Api): ChatThread[] {
   return api.saveChat.mock.calls.map((c) => c[1] as ChatThread)
@@ -203,7 +210,8 @@ it('stop keeps the partial reply and saves it', async () => {
   render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} />)
   const req = await sendMessage(api, 'hi')
   fire({ requestId: req.requestId, kind: 'delta', text: 'Partial ans' })
-  expect(screen.getByLabelText('Message')).toBeDisabled()
+  expect(screen.getByLabelText('Message')).toHaveAttribute('readonly')
+  laterBy(1000)
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
   expect(api.cancelChat).toHaveBeenCalledWith(req.requestId)
   fire({ requestId: req.requestId, kind: 'done', stopped: true })
@@ -211,8 +219,72 @@ it('stop keeps the partial reply and saves it', async () => {
   await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(2))
   expect(savedThreads(api)[1].messages.map((m) => m.content)).toEqual(['hi', 'Partial ans'])
   expect(screen.getByLabelText('Message')).toBeEnabled()
+  expect(screen.getByLabelText('Message')).not.toHaveAttribute('readonly')
   expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('a stopped empty reply is dropped without an alert', async () => {
+  const api = stub()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} />)
+  const req = await sendMessage(api, 'hi')
+  fire({ requestId: req.requestId, kind: 'done', stopped: true })
+  await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(2))
+  expect(savedThreads(api)[1].messages.map((m) => m.role)).toEqual(['user'])
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('says so when a reply finishes with no text', async () => {
+  const api = stub()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} />)
+  const req = await sendMessage(api, 'hi')
+  fire({ requestId: req.requestId, kind: 'done', stopped: false })
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'No reply came back. Try again or pick another model.'
+  )
+  await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(2))
+  expect(savedThreads(api)[1].messages.map((m) => m.role)).toEqual(['user'])
+})
+
+it('a Stop click right after Send does not cancel the reply', async () => {
+  const api = stub()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} />)
+  const box = await screen.findByLabelText('Message')
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-a'))
+  fireEvent.change(box, { target: { value: 'hi' } })
+  const sendButton = screen.getByRole('button', { name: 'Send' })
+  const t0 = Date.now()
+  const now = vi.spyOn(Date, 'now').mockReturnValue(t0)
+  fireEvent.click(sendButton)
+  await waitFor(() => expect(api.startChat).toHaveBeenCalledTimes(1))
+  const stopButton = screen.getByRole('button', { name: 'Stop' })
+  expect(stopButton).not.toBe(sendButton)
+  now.mockReturnValue(t0 + 250)
+  fireEvent.click(stopButton)
+  expect(api.cancelChat).not.toHaveBeenCalled()
+  now.mockReturnValue(t0 + 301)
+  fireEvent.click(stopButton)
+  const req = api.startChat.mock.calls[0][0] as ChatRequest
+  expect(api.cancelChat).toHaveBeenCalledWith(req.requestId)
+})
+
+it('keeps focus in the composer across a reply, and Enter cannot send while streaming', async () => {
+  const api = stub()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} />)
+  const box = await screen.findByLabelText('Message')
+  box.focus()
+  const req = await sendMessage(api, 'hi')
+  expect(box).not.toBeDisabled()
+  expect(box).toHaveAttribute('aria-busy', 'true')
+  expect(box).toHaveFocus()
+  fireEvent.change(box, { target: { value: 'again' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(api.startChat).toHaveBeenCalledTimes(1)
+  fire({ requestId: req.requestId, kind: 'delta', text: 'Hello' })
+  fire({ requestId: req.requestId, kind: 'done', stopped: false })
+  expect(box).toHaveFocus()
+  expect(box).not.toHaveAttribute('readonly')
+  expect(box).toHaveAttribute('aria-busy', 'false')
 })
 
 it('shows provider errors and drops an empty reply', async () => {

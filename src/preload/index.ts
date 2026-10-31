@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { CanonballApi, FlushResult, MenuCommand } from '../shared/types'
 import type { ChatEvent } from '../shared/ai'
+import { cleanIpcError } from '../shared/ipcError'
+
+/** Every call to main goes through here, so the renderer sees main's message, not Electron's wrapper. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const invoke = (channel: string, ...args: unknown[]): Promise<any> =>
+  ipcRenderer.invoke(channel, ...args).catch((e: unknown) => {
+    throw cleanIpcError(e)
+  })
 
 let flushHandler: (() => Promise<void>) | null = null
 
@@ -15,20 +23,19 @@ ipcRenderer.on('canonball:flush-request', async () => {
 })
 
 const api: CanonballApi = {
-  openProjectDialog: () => ipcRenderer.invoke('canonball:openProjectDialog'),
-  newProjectDialog: () => ipcRenderer.invoke('canonball:newProjectDialog'),
-  openProject: (root) => ipcRenderer.invoke('canonball:openProject', root),
-  refreshTree: () => ipcRenderer.invoke('canonball:refreshTree'),
-  readDoc: (relPath) => ipcRenderer.invoke('canonball:readDoc', relPath),
-  writeDoc: (root, relPath, content) =>
-    ipcRenderer.invoke('canonball:writeDoc', root, relPath, content),
-  getSettings: () => ipcRenderer.invoke('canonball:getSettings'),
-  setSettings: (patch) => ipcRenderer.invoke('canonball:setSettings', patch),
-  getProjectAccess: () => ipcRenderer.invoke('canonball:getProjectAccess'),
+  openProjectDialog: () => invoke('canonball:openProjectDialog'),
+  newProjectDialog: () => invoke('canonball:newProjectDialog'),
+  openProject: (root) => invoke('canonball:openProject', root),
+  refreshTree: () => invoke('canonball:refreshTree'),
+  readDoc: (relPath) => invoke('canonball:readDoc', relPath),
+  writeDoc: (root, relPath, content) => invoke('canonball:writeDoc', root, relPath, content),
+  getSettings: () => invoke('canonball:getSettings'),
+  setSettings: (patch) => invoke('canonball:setSettings', patch),
+  getProjectAccess: () => invoke('canonball:getProjectAccess'),
   setPathAccess: (root, relPath, access) =>
-    ipcRenderer.invoke('canonball:setPathAccess', root, relPath, access),
-  setProsePaths: (root, prose) => ipcRenderer.invoke('canonball:setProsePaths', root, prose),
-  lintGrammar: (texts) => ipcRenderer.invoke('canonball:lintGrammar', texts),
+    invoke('canonball:setPathAccess', root, relPath, access),
+  setProsePaths: (root, prose) => invoke('canonball:setProsePaths', root, prose),
+  lintGrammar: (texts) => invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler
   },
@@ -39,16 +46,16 @@ const api: CanonballApi = {
       ipcRenderer.removeListener('canonball:menu', listener)
     }
   },
-  getAiStatus: () => ipcRenderer.invoke('canonball:getAiStatus'),
-  setApiKey: (provider, key) => ipcRenderer.invoke('canonball:setApiKey', provider, key),
-  setLocalUrl: (url) => ipcRenderer.invoke('canonball:setLocalUrl', url),
-  setModel: (choice) => ipcRenderer.invoke('canonball:setModel', choice),
-  listModels: () => ipcRenderer.invoke('canonball:listModels'),
-  startChat: (req) => ipcRenderer.invoke('canonball:startChat', req),
-  cancelChat: (requestId) => ipcRenderer.invoke('canonball:cancelChat', requestId),
-  listChats: () => ipcRenderer.invoke('canonball:listChats'),
-  loadChat: (id) => ipcRenderer.invoke('canonball:loadChat', id),
-  saveChat: (root, thread) => ipcRenderer.invoke('canonball:saveChat', root, thread),
+  getAiStatus: () => invoke('canonball:getAiStatus'),
+  setApiKey: (provider, key) => invoke('canonball:setApiKey', provider, key),
+  setLocalUrl: (url) => invoke('canonball:setLocalUrl', url),
+  setModel: (choice) => invoke('canonball:setModel', choice),
+  listModels: () => invoke('canonball:listModels'),
+  startChat: (req) => invoke('canonball:startChat', req),
+  cancelChat: (requestId) => invoke('canonball:cancelChat', requestId),
+  listChats: () => invoke('canonball:listChats'),
+  loadChat: (id) => invoke('canonball:loadChat', id),
+  saveChat: (root, thread) => invoke('canonball:saveChat', root, thread),
   onChatEvent: (handler) => {
     const listener = (_e: Electron.IpcRendererEvent, event: ChatEvent): void => handler(event)
     ipcRenderer.on('canonball:chatEvent', listener)
