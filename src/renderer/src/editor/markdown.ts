@@ -49,23 +49,25 @@ function isEmptyParagraph(node: JSONContent | undefined): boolean {
   return node?.type === 'paragraph' && !node.content?.length
 }
 
+const INLINE_FORM: Record<string, string> = {
+  htmlComment: 'htmlCommentInline',
+  rawBlock: 'rawInline'
+}
+
 /**
- * `- <!-- hint -->` reaches us as a list item holding an empty paragraph and a
- * block comment, because a list item must start with a paragraph. Fold the
- * comment into that paragraph so it saves back as `- <!-- hint -->`.
+ * `- <!-- hint -->` (or `- <div>…</div>`) reaches us as a list item holding an
+ * empty paragraph and a block atom, because a list item must start with a
+ * paragraph. Fold the atom into that paragraph so it saves back on one line.
  */
-function liftLeadingComments(node: JSONContent): JSONContent {
+function liftLeadingAtoms(node: JSONContent): JSONContent {
   if (!node.content) return node
-  const content = node.content.map(liftLeadingComments)
+  const content = node.content.map(liftLeadingAtoms)
   const [first, second] = content
-  if (
-    (node.type === 'listItem' || node.type === 'taskItem') &&
-    isEmptyParagraph(first) &&
-    second?.type === 'htmlComment'
-  ) {
+  const inline = second?.type ? INLINE_FORM[second.type] : undefined
+  if ((node.type === 'listItem' || node.type === 'taskItem') && isEmptyParagraph(first) && inline) {
     content.splice(0, 2, {
       type: 'paragraph',
-      content: [{ type: 'htmlCommentInline', attrs: { raw: second.attrs?.raw ?? '' } }]
+      content: [{ type: inline, attrs: { raw: second.attrs?.raw ?? '' } }]
     })
   }
   return { ...node, content }
@@ -78,7 +80,7 @@ function requireMarkdown(editor: Editor): NonNullable<Editor['markdown']> {
 
 export function loadIntoEditor(editor: Editor, md: string): OpenDoc {
   const { frontMatter, body } = splitFrontMatter(md)
-  const json = liftLeadingComments(requireMarkdown(editor).parse(body))
+  const json = liftLeadingAtoms(requireMarkdown(editor).parse(body))
   editor.commands.setContent(json.content?.length ? json : '', { emitUpdate: false })
   return { frontMatter }
 }

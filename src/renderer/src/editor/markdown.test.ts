@@ -22,6 +22,12 @@ const templateFiles = markdownFiles(templateDir).map((file) => ({
   text: readFileSync(file, 'utf8')
 }))
 
+const edgeCases = {
+  name: 'editor/__fixtures__/edge-cases.md',
+  text: readFileSync(join(__dirname, '__fixtures__/edge-cases.md'), 'utf8')
+}
+const allFixtures = [...templateFiles, edgeCases]
+
 let editors: Editor[] = []
 
 function newEditor(): Editor {
@@ -96,12 +102,29 @@ describe('markdown round trip', () => {
     expect(out).toContain('He stayed.')
   })
 
-  it.each(templateFiles)('preserves block HTML comments verbatim in $name', ({ text }) => {
+  it.each(allFixtures)('preserves block HTML comments verbatim in $name', ({ text }) => {
     const out = roundTrip(text)
     for (const comment of comments(text)) {
       expect(out).toContain(comment)
     }
     expect(comments(out)).toEqual(comments(text))
+  })
+
+  it('saves the edge-case fixture byte-for-byte', () => {
+    expect(roundTrip(edgeCases.text)).toBe(edgeCases.text)
+  })
+
+  it('shows raw HTML as non-editable source text', () => {
+    const editor = newEditor()
+    loadIntoEditor(editor, '<div align="center">\nx\n</div>\n\nPara <span class="a">y</span>\n')
+    const raws = Array.from(editor.view.dom.querySelectorAll('.cb-raw'))
+    expect(raws.map((r) => r.textContent)).toEqual([
+      '<div align="center">\nx\n</div>',
+      '<span class="a">',
+      '</span>'
+    ])
+    for (const raw of raws) expect(raw.getAttribute('contenteditable')).toBe('false')
+    expect(editor.view.dom.querySelector('div[align]')).toBeNull()
   })
 
   it('preserves inline HTML comments', () => {
@@ -119,12 +142,12 @@ describe('markdown round trip', () => {
     expect(editor.view.dom.querySelector('div.cb-hint')).not.toBeNull()
   })
 
-  it.each(templateFiles)('round trip is idempotent for $name', ({ text }) => {
+  it.each(allFixtures)('round trip is idempotent for $name', ({ text }) => {
     const once = roundTrip(text)
     expect(roundTrip(once)).toBe(once)
   })
 
-  it.each(templateFiles)('keeps every word in $name', ({ text }) => {
+  it.each(allFixtures)('keeps every word in $name', ({ text }) => {
     expect(wordCounts(roundTrip(text))).toEqual(wordCounts(text))
   })
 
@@ -157,6 +180,11 @@ describe('markdown round trip', () => {
   })
 
   it.each([
+    ['a sentence ending in !', 'He was gone!\n'],
+    ['raw HTML blocks', '<div align="center">\nx\n</div>\n\nAfter.\n'],
+    ['inline HTML tags', 'Para <span class="a">y</span> <br> z\n'],
+    ['footnotes', 'Text[^1].\n\n[^1]: Note.\n'],
+    ['a multi-word footnote', 'See[^n].\n\n[^n]: A longer note here.\n'],
     ['template placeholders', '## Chapter 1 — *[Title]*\n\n### [Character Name]\n'],
     ['deep headings', '#### Four\n\n###### Six\n'],
     ['task lists', '- [ ] todo\n- [x] done\n'],
@@ -189,7 +217,8 @@ describe('markdown round trip', () => {
     '<b>not a tag</b> <!-- not a comment -->',
     'AT&T &amp; &copy; &#38;',
     'back\\slash `not code` ~~not struck~~',
-    'https://example.com/_a_'
+    'https://example.com/_a_',
+    'a [^1] that is not a footnote'
   ])('reads typed text %j back exactly', (text) => {
     const editor = newEditor()
     editor.commands.setContent({

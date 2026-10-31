@@ -34,7 +34,7 @@ function blockCommentStart(src: string): number {
   return match ? match.index + 1 : -1
 }
 
-function commentAttributes(): { raw: { default: string; rendered: false } } {
+function rawAttribute(): { raw: { default: string; rendered: false } } {
   return { raw: { default: '', rendered: false } }
 }
 
@@ -58,7 +58,7 @@ export const HtmlComment = Node.create({
   selectable: true,
   draggable: false,
 
-  addAttributes: commentAttributes,
+  addAttributes: rawAttribute,
 
   parseHTML() {
     return [{ tag: 'div[data-cb-comment]', getAttrs: parseRaw }]
@@ -110,7 +110,7 @@ export const HtmlCommentInline = Node.create({
   selectable: true,
   draggable: false,
 
-  addAttributes: commentAttributes,
+  addAttributes: rawAttribute,
 
   parseHTML() {
     return [{ tag: 'span[data-cb-comment]', getAttrs: parseRaw }]
@@ -140,6 +140,114 @@ export const HtmlCommentInline = Node.create({
   }
 })
 
+// Inline HTML as CommonMark defines it: an open or closing tag, a processing
+// instruction, a declaration or CDATA (comments are handled above). Autolinks
+// such as `<https://…>` and `<a@b.com>` do not match.
+const INLINE_HTML =
+  /^(?:<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?)*\s*\/?>|<\/[A-Za-z][A-Za-z0-9-]*\s*>|<\?[\s\S]*?\?>|<![A-Za-z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>)/
+// A footnote reference, `[^1]` or `[^long-note]`.
+const FOOTNOTE_REF = /^\[\^[^\]\s]+\]/
+// A footnote definition, with any continuation lines indented four spaces or
+// a tab (blank lines may sit between them).
+const FOOTNOTE_DEF = /^\[\^[^\]\s]+\]:[^\n]*(?:\n(?:[ \t]*\n)*(?: {4}|\t)[^\n]*)*(?:\n|$)/
+
+function rawAttributes(raw: string): Record<string, string> {
+  return { class: 'cb-raw', contenteditable: 'false', 'data-cb-raw': raw }
+}
+
+function parseRawSource(element: HTMLElement): { raw: string } {
+  return { raw: element.getAttribute('data-cb-raw') ?? '' }
+}
+
+/**
+ * Markdown the editor does not understand, standing on its own line(s): an
+ * HTML block (from marked's `html` token) or a footnote definition. The writer
+ * sees the source as read-only text; `raw` is written back exactly.
+ */
+export const RawBlock = Node.create({
+  name: 'rawBlock',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: false,
+
+  addAttributes: rawAttribute,
+
+  parseHTML() {
+    return [{ tag: 'div[data-cb-raw]', getAttrs: parseRawSource }]
+  },
+
+  renderHTML({ node }) {
+    return ['div', rawAttributes(node.attrs.raw), node.attrs.raw]
+  },
+
+  markdownTokenName: 'html',
+
+  // Footnote definitions come through as block `html` tokens so they share the
+  // handler below. `start` never fires: like marked's own definitions, they do not
+  // interrupt a paragraph.
+  markdownTokenizer: {
+    name: 'footnoteDefinition',
+    level: 'block',
+    start: () => -1,
+    tokenize(src) {
+      const match = FOOTNOTE_DEF.exec(src)
+      if (!match) return undefined
+      return { type: 'html', block: true, raw: match[0], text: match[0] }
+    }
+  },
+
+  parseMarkdown(token, helpers) {
+    if (!token.block) return []
+    return helpers.createNode('rawBlock', { raw: (token.raw ?? '').replace(/\n+$/, '') })
+  },
+
+  renderMarkdown(node) {
+    return node.attrs?.raw ?? ''
+  }
+})
+
+/** An inline HTML tag (`<span class="a">`, `</span>`, `<br>`) or footnote reference. */
+export const RawInline = Node.create({
+  name: 'rawInline',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  draggable: false,
+
+  addAttributes: rawAttribute,
+
+  parseHTML() {
+    return [{ tag: 'span[data-cb-raw]', getAttrs: parseRawSource }]
+  },
+
+  renderHTML({ node }) {
+    return ['span', rawAttributes(node.attrs.raw), node.attrs.raw]
+  },
+
+  // Runs before marked's own inline rules, so `[^1]` is never read as a link
+  // and tags never reach @tiptap/markdown's HTML parsing, which drops them.
+  markdownTokenizer: {
+    name: 'rawInline',
+    level: 'inline',
+    start: (src) => src.search(/<[A-Za-z/?!]|\[\^/),
+    tokenize(src) {
+      const match = INLINE_HTML.exec(src) ?? FOOTNOTE_REF.exec(src)
+      if (!match) return undefined
+      return { type: 'rawInline', raw: match[0], text: match[0] }
+    }
+  },
+
+  parseMarkdown(token, helpers) {
+    return helpers.createNode('rawInline', { raw: token.text ?? '' })
+  },
+
+  renderMarkdown(node) {
+    return node.attrs?.raw ?? ''
+  }
+})
+
 // What marked's GFM autolinker reads as a bare URL (before it trims trailing
 // punctuation, which can then neither open nor close emphasis). The parser reads
 // it verbatim, backslashes included, so it must not be escaped.
@@ -156,6 +264,8 @@ function escapeInline(text: string): string {
       // a `]` that could close a link, reference or definition; without one, no
       // `[` can start a link
       .replace(/\](?=[([:])/g, '\\]')
+      // `[^` would read back as a footnote reference
+      .replace(/\[(?=\^)/g, '\\[')
       // `<` only where it could open a tag, comment or autolink
       .replace(/<(?=[A-Za-z/!?])/g, '\\<')
   )
@@ -169,10 +279,15 @@ function escapeInline(text: string): string {
  *
  * - `inParagraph`: escape line starts that would become a heading, quote or list.
  * - `inLink`: the text is a link label, where marked does not autolink URLs.
+ * - `beforeLink`: a link starts right after this text.
  */
 export function escapeMarkdownText(
   text: string,
-  { inParagraph, inLink }: { inParagraph: boolean; inLink: boolean }
+  {
+    inParagraph = false,
+    inLink = false,
+    beforeLink = false
+  }: { inParagraph?: boolean; inLink?: boolean; beforeLink?: boolean }
 ): string {
   let out = ''
   let rest = 0
@@ -183,8 +298,8 @@ export function escapeMarkdownText(
     }
   }
   const tail = escapeInline(text.slice(rest))
-  // a trailing `!` would turn a following link into an image
-  out += tail.replace(/!$/, '\\!')
+  // a trailing `!` right before a link's `[` would turn the link into an image
+  out += beforeLink ? tail.replace(/!$/, '\\!') : tail
   if (inParagraph) {
     out = out
       .replace(/(^|\n)([#>])/g, '$1\\$2')
@@ -195,6 +310,18 @@ export function escapeMarkdownText(
 }
 
 type EncodeText = (text: string, node: JSONContent, parent?: JSONContent) => string
+
+function hasLink(node: JSONContent | undefined): boolean {
+  return (node?.marks ?? []).some((m) => (typeof m === 'string' ? m : m.type) === 'link')
+}
+
+/** Whether a link opens right after this text node (unknown position → assume so). */
+function linkFollows(node: JSONContent, parent?: JSONContent): boolean {
+  const siblings = parent?.content ?? []
+  const index = siblings.indexOf(node)
+  if (index === -1) return true
+  return !hasLink(node) && hasLink(siblings[index + 1])
+}
 
 const CanonballMarkdown = Markdown.extend({
   onBeforeCreate(event) {
@@ -209,7 +336,8 @@ const CanonballMarkdown = Markdown.extend({
         ? original(text, node, parent)
         : escapeMarkdownText(text, {
             inParagraph: parent?.type === 'paragraph',
-            inLink: (node.marks ?? []).some((m) => (typeof m === 'string' ? m : m.type) === 'link')
+            inLink: hasLink(node),
+            beforeLink: linkFollows(node, parent)
           })
   }
 })
@@ -260,6 +388,8 @@ export function createExtensions(): Extensions {
     Image.configure({ inline: true }),
     HtmlComment,
     HtmlCommentInline,
+    RawBlock,
+    RawInline,
     CanonballMarkdown
   ]
 }
