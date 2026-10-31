@@ -1,5 +1,5 @@
 import { PROVIDER_LABEL, type ChatEvent, type ChatRequest } from '../../shared/ai'
-import type { FetchFn } from './adapter'
+import { toAiMessages, type FetchFn } from './adapter'
 import type { AiConfig } from './aiConfig'
 import { errorText } from './aiConfig'
 import { ProviderError } from './errors'
@@ -40,12 +40,12 @@ export function createChatService(deps: {
       if (signal.aborted) return
       const stream = adapterFor(model.provider).streamChat(
         cfg,
-        { model: model.model, system: CHAT_INSTRUCTIONS, messages: req.messages, signal },
+        { model: model.model, system: CHAT_INSTRUCTIONS, messages: toAiMessages(req.messages), signal },
         deps.fetch
       )
-      for await (const text of stream) {
+      for await (const part of stream) {
         if (signal.aborted) break
-        emit({ requestId, kind: 'delta', text })
+        if (part.type === 'text') emit({ requestId, kind: 'delta', text: part.text })
       }
       entry.finish({ requestId, kind: 'done', stopped: signal.aborted })
     } catch (err) {

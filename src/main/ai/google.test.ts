@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { google } from './google'
-import type { FetchFn, ProviderConfig } from './adapter'
+import type { FetchFn, ProviderConfig, StreamArgs, StreamPart } from './adapter'
 
 function sseResponse(lines: string[]): Response {
   const enc = new TextEncoder()
@@ -19,6 +19,103 @@ const cfg: ProviderConfig = {
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta'
 }
 
+function data(obj: unknown): string {
+  return `data: ${JSON.stringify(obj)}\r\n\r\n`
+}
+
+const TOOL = {
+  name: 'list_files',
+  description: 'List files.',
+  parameters: { type: 'object', properties: {} }
+}
+
+async function collect(fetchFn: FetchFn, over: Partial<StreamArgs> = {}): Promise<StreamPart[]> {
+  const out: StreamPart[] = []
+  for await (const p of google.streamChat(
+    cfg,
+    {
+      model: 'gemini-2.5-pro',
+      system: 'S',
+      messages: [{ role: 'user', content: 'x' }],
+      signal: new AbortController().signal,
+      ...over
+    },
+    fetchFn
+  ))
+    out.push(p)
+  return out
+}
+
+describe('google tools', () => {
+  it('emits function calls and replays them with their signature', async () => {
+    const part = { functionCall: { name: 'list_files', args: {} }, thoughtSignature: 'sig' }
+    const fetchFn: FetchFn = async () =>
+      sseResponse([
+        data({ candidates: [{ content: { role: 'model', parts: [{ text: 'Let me look.' }, part] } }] }),
+        data({
+          candidates: [
+            { content: { role: 'model', parts: [{ functionCall: { name: 'read_file', args: 'bad' } }] } }
+          ]
+        })
+      ])
+    const out = await collect(fetchFn, { tools: [TOOL] })
+    expect(out).toEqual([
+      { type: 'text', text: 'Let me look.' },
+      { type: 'tool_call', call: { id: 'call_1', name: 'list_files', args: {}, meta: part } },
+      {
+        type: 'tool_call',
+        call: {
+          id: 'call_2',
+          name: 'read_file',
+          args: {},
+          meta: { functionCall: { name: 'read_file', args: 'bad' } }
+        }
+      }
+    ])
+    const call = (out[1] as Extract<StreamPart, { type: 'tool_call' }>).call
+
+    let body: { contents: unknown[] } = { contents: [] }
+    const replayFetch: FetchFn = async (_u, init) => {
+      body = JSON.parse(init!.body as string)
+      return sseResponse([])
+    }
+    await collect(replayFetch, {
+      tools: [TOOL],
+      messages: [
+        { role: 'user', content: 'What is there?' },
+        { role: 'assistant', content: 'Let me look.', toolCalls: [call] },
+        { role: 'tool', results: [{ callId: call.id, name: 'list_files', content: 'a.md (can edit)', isError: false }] },
+        { role: 'assistant', content: '', toolCalls: [{ id: 'call_9', name: 'read_file', args: { path: 'z' } }] },
+        { role: 'tool', results: [{ callId: 'call_9', name: 'read_file', content: 'Nope', isError: true }] }
+      ]
+    })
+    expect(body.contents).toEqual([
+      { role: 'user', parts: [{ text: 'What is there?' }] },
+      { role: 'model', parts: [{ text: 'Let me look.' }, part] },
+      {
+        role: 'user',
+        parts: [{ functionResponse: { name: 'list_files', response: { content: 'a.md (can edit)' } } }]
+      },
+      { role: 'model', parts: [{ functionCall: { name: 'read_file', args: { path: 'z' } } }] },
+      { role: 'user', parts: [{ functionResponse: { name: 'read_file', response: { error: 'Nope' } } }] }
+    ])
+  })
+
+  it('sends functionDeclarations', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const fetchFn: FetchFn = async (_u, init) => {
+      bodies.push(JSON.parse(init!.body as string))
+      return sseResponse([])
+    }
+    await collect(fetchFn, { tools: [TOOL] })
+    await collect(fetchFn, {})
+    expect(bodies[0].tools).toEqual([
+      { functionDeclarations: [{ name: 'list_files', description: 'List files.', parameters: TOOL.parameters }] }
+    ])
+    expect(bodies[1]).not.toHaveProperty('tools')
+  })
+})
+
 describe('google', () => {
   it('streams text and maps assistant to model', async () => {
     let seen: { url: string; init: RequestInit } | null = null
@@ -30,7 +127,7 @@ describe('google', () => {
         'data: {"usageMetadata":{}}\r\n\r\n'
       ])
     }
-    const out: string[] = []
+    const out: StreamPart[] = []
     for await (const t of google.streamChat(
       cfg,
       {
@@ -46,7 +143,10 @@ describe('google', () => {
       fetchFn
     ))
       out.push(t)
-    expect(out).toEqual(['Hello', ' world'])
+    expect(out).toEqual([
+      { type: 'text', text: 'Hello' },
+      { type: 'text', text: ' world' }
+    ])
     expect(seen!.url).toBe(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse'
     )

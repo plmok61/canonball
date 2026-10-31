@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { openaiCompat } from './openaiCompat'
 import { ProviderError } from './errors'
-import type { FetchFn, ProviderConfig } from './adapter'
+import type { FetchFn, ProviderConfig, StreamArgs, StreamPart } from './adapter'
 
 function sseResponse(lines: string[]): Response {
   const enc = new TextEncoder()
@@ -20,6 +20,33 @@ function json(data: unknown, status = 200): Response {
 
 const cfg: ProviderConfig = { provider: 'openai', apiKey: 'sk-test', baseUrl: 'https://api.openai.com/v1' }
 
+function data(obj: unknown): string {
+  return `data: ${JSON.stringify(obj)}\n\n`
+}
+
+const TOOL = {
+  name: 'read_file',
+  description: 'Read a file.',
+  parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }
+}
+
+async function collect(fetchFn: FetchFn, over: Partial<StreamArgs>): Promise<StreamPart[]> {
+  const out: StreamPart[] = []
+  for await (const p of openaiCompat.streamChat(
+    cfg,
+    {
+      model: 'gpt-4o',
+      system: 'S',
+      messages: [{ role: 'user', content: 'x' }],
+      signal: new AbortController().signal,
+      ...over
+    },
+    fetchFn
+  ))
+    out.push(p)
+  return out
+}
+
 describe('openaiCompat', () => {
   it('streams text deltas', async () => {
     let seen: { url: string; init: RequestInit } | null = null
@@ -32,7 +59,7 @@ describe('openaiCompat', () => {
         'data: {"choices":[{"delta":{"content":"ignored"}}]}\n\n'
       ])
     }
-    const out: string[] = []
+    const out: StreamPart[] = []
     for await (const t of openaiCompat.streamChat(
       cfg,
       {
@@ -47,7 +74,10 @@ describe('openaiCompat', () => {
       fetchFn
     ))
       out.push(t)
-    expect(out).toEqual(['Hel', 'lo'])
+    expect(out).toEqual([
+      { type: 'text', text: 'Hel' },
+      { type: 'text', text: 'lo' }
+    ])
     expect(seen!.url).toBe('https://api.openai.com/v1/chat/completions')
     const body = JSON.parse(seen!.init.body as string)
     expect(body.stream).toBe(true)
@@ -56,6 +86,100 @@ describe('openaiCompat', () => {
     expect(body.messages).toHaveLength(2)
     expect(body.messages[1]).toEqual({ role: 'user', content: 'a\n\nb' })
     expect((seen!.init.headers as Record<string, string>).Authorization).toBe('Bearer sk-test')
+  })
+
+  it('streams a tool call split across chunks', async () => {
+    let body: Record<string, unknown> = {}
+    const fetchFn: FetchFn = async (_u, init) => {
+      body = JSON.parse(init!.body as string)
+      return sseResponse([
+        data({ choices: [{ delta: { content: 'Looking.' } }] }),
+        data({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"pa' } }
+                ]
+              }
+            }
+          ]
+        }),
+        data({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'th":"a.md"}' } }] } }] }),
+        data({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
+        'data: [DONE]\n\n'
+      ])
+    }
+    const out = await collect(fetchFn, { tools: [TOOL] })
+    expect(out).toEqual([
+      { type: 'text', text: 'Looking.' },
+      { type: 'tool_call', call: { id: 'c1', name: 'read_file', args: { path: 'a.md' } } }
+    ])
+    const tools = body.tools as { type: string; function: Record<string, unknown> }[]
+    expect(tools[0].type).toBe('function')
+    expect(tools[0].function).toEqual({
+      name: 'read_file',
+      description: 'Read a file.',
+      parameters: TOOL.parameters
+    })
+  })
+
+  it('sends no tools field without tools', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const fetchFn: FetchFn = async (_u, init) => {
+      bodies.push(JSON.parse(init!.body as string))
+      return sseResponse(['data: [DONE]\n\n'])
+    }
+    await collect(fetchFn, {})
+    await collect(fetchFn, { tools: [] })
+    expect(bodies[0]).not.toHaveProperty('tools')
+    expect(bodies[1]).not.toHaveProperty('tools')
+  })
+
+  it('replays tool calls and results', async () => {
+    let body: { messages: Record<string, unknown>[] } = { messages: [] }
+    const fetchFn: FetchFn = async (_u, init) => {
+      body = JSON.parse(init!.body as string)
+      return sseResponse(['data: [DONE]\n\n'])
+    }
+    await collect(fetchFn, {
+      tools: [TOOL],
+      messages: [
+        { role: 'user', content: 'Read a' },
+        { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read_file', args: { path: 'a.md' } }] },
+        { role: 'tool', results: [{ callId: 'c1', name: 'read_file', content: 'A text', isError: false }] }
+      ]
+    })
+    expect(body.messages).toHaveLength(4)
+    expect(body.messages[2]).toEqual({
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.md"}' } }]
+    })
+    expect(body.messages[3]).toEqual({ role: 'tool', tool_call_id: 'c1', content: 'A text' })
+  })
+
+  it('unparsable tool arguments become an empty object', async () => {
+    const fetchFn: FetchFn = async () =>
+      sseResponse([
+        data({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'c1', function: { name: 'read_file', arguments: '{"pa' } },
+                  { index: 1, id: 'c2', function: { name: 'list_files', arguments: '[1]' } }
+                ]
+              }
+            }
+          ]
+        })
+      ])
+    const out = await collect(fetchFn, { tools: [TOOL] })
+    expect(out).toEqual([
+      { type: 'tool_call', call: { id: 'c1', name: 'read_file', args: {} } },
+      { type: 'tool_call', call: { id: 'c2', name: 'list_files', args: {} } }
+    ])
   })
 
   it('omits the auth header without a key', async () => {

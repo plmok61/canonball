@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { httpError, networkError, ProviderError } from './errors'
+import { httpError, networkError, ProviderError, rejectsTools } from './errors'
 
 describe('errors', () => {
   it('maps statuses to writer copy', () => {
@@ -46,6 +46,26 @@ describe('errors', () => {
     expect(networkError('openai', new TypeError('fetch failed')).message).toBe(
       "Couldn't reach OpenAI. Check your internet connection."
     )
+  })
+
+  it('keeps the status and body on http errors', () => {
+    const e = httpError('openai', 500, '{"error":{"message":"boom"}}')
+    expect(e.status).toBe(500)
+    expect(e.body).toBe('{"error":{"message":"boom"}}')
+    expect(httpError('openai', 401, 'nope').status).toBe(401)
+  })
+
+  it('rejectsTools spots tool-unsupported errors', () => {
+    const ollama = '{"error":"registry.ollama.ai/library/gemma does not support tools"}'
+    expect(rejectsTools(httpError('local', 400, ollama))).toBe(true)
+    expect(rejectsTools(httpError('local', 404, 'function calling unsupported'))).toBe(true)
+    expect(rejectsTools(httpError('local', 422, 'tools not allowed'))).toBe(true)
+    expect(rejectsTools(httpError('local', 501, 'Tool use not implemented'))).toBe(true)
+    expect(rejectsTools(httpError('local', 400, 'bad request'))).toBe(false)
+    expect(rejectsTools(httpError('local', 500, 'tools are broken'))).toBe(false)
+    expect(rejectsTools(new ProviderError('tools'))).toBe(false)
+    expect(rejectsTools(new Error('400 does not support tools'))).toBe(false)
+    expect(rejectsTools(null)).toBe(false)
   })
 
   it('rethrows aborts unchanged', () => {
