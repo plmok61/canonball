@@ -1,3 +1,5 @@
+import { parseProposal, proposalNote, type Proposal } from './proposals'
+
 export type CloudProvider = 'anthropic' | 'openai' | 'google'
 export type ProviderId = CloudProvider | 'local'
 
@@ -34,6 +36,7 @@ export interface ChatTurn {
 export interface ChatMessage extends ChatTurn {
   at: string
   model?: ModelChoice
+  proposals?: Proposal[]
 }
 export interface ChatThread {
   version: 1
@@ -57,6 +60,7 @@ export type ChatEvent =
   | { requestId: string; kind: 'delta'; text: string }
   | { requestId: string; kind: 'done'; stopped: boolean }
   | { requestId: string; kind: 'error'; message: string }
+  | { requestId: string; kind: 'proposal'; proposal: Proposal }
 
 export const CHAT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
@@ -109,6 +113,16 @@ export function mergeTurns(turns: ChatTurn[]): ChatTurn[] {
   return out
 }
 
+export function turnsForModel(messages: ChatMessage[]): ChatTurn[] {
+  return messages.map((m) => {
+    if (m.role !== 'assistant' || !m.proposals || m.proposals.length === 0) {
+      return { role: m.role, content: m.content }
+    }
+    const notes = m.proposals.map(proposalNote).join('\n')
+    return { role: m.role, content: m.content === '' ? notes : m.content + '\n\n' + notes }
+  })
+}
+
 function isRole(x: unknown): x is ChatTurn['role'] {
   return x === 'user' || x === 'assistant'
 }
@@ -139,6 +153,16 @@ export function parseChatThread(x: unknown): ChatThread | null {
       const model = parseModelChoice(m.model)
       if (!model) return null
       msg.model = model
+    }
+    if (m.proposals !== undefined) {
+      if (!Array.isArray(m.proposals)) return null
+      const proposals: Proposal[] = []
+      for (const p of m.proposals) {
+        const parsed = parseProposal(p)
+        if (!parsed) return null
+        proposals.push(parsed)
+      }
+      msg.proposals = proposals
     }
     messages.push(msg)
   }

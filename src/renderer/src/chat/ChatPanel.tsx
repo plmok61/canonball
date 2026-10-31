@@ -126,6 +126,8 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
       commit({ ...viewRef.current, thread: { ...thread, messages: msgs } })
     } else if (e.kind === 'done') {
       finish(e.requestId, null, e.stopped)
+    } else if (e.kind === 'proposal') {
+      // Proposal cards are wired up in a later task.
     } else {
       finish(e.requestId, e.message)
     }

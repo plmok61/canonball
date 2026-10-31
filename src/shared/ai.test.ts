@@ -5,8 +5,10 @@ import {
   normalizeLocalUrl,
   parseChatRequest,
   parseChatThread,
-  parseModelChoice
+  parseModelChoice,
+  turnsForModel
 } from './ai'
+import type { Proposal } from './proposals'
 
 const ID = '123e4567-e89b-12d3-a456-426614174000'
 
@@ -124,5 +126,40 @@ describe('parseChatRequest', () => {
     expect(parseChatRequest({ ...ok, requestId: '' })).toBeNull()
     expect(parseChatRequest({ ...ok, requestId: 5 })).toBeNull()
     expect(parseChatRequest({ ...ok, model: { provider: 'bad', model: 'm' } })).toBeNull()
+  })
+})
+
+describe('proposals in threads', () => {
+  const prop: Proposal = {
+    id: ID,
+    kind: 'edit',
+    relPath: 'notes/ideas.md',
+    before: 'a',
+    after: 'b',
+    status: 'accepted'
+  }
+  const withProps = (proposals: unknown): Record<string, unknown> =>
+    thread({
+      messages: [{ role: 'assistant', content: 'Done', at: '2026-10-31T10:00:00.000Z', proposals }]
+    })
+
+  it('parseChatThread keeps valid proposals and rejects invalid ones', () => {
+    const ok = parseChatThread(withProps([prop]))
+    expect(ok?.messages[0].proposals).toEqual([prop])
+    expect(parseChatThread(withProps([{ ...prop, status: 'maybe' }]))).toBeNull()
+    expect(parseChatThread(withProps('nope'))).toBeNull()
+  })
+
+  it('turnsForModel appends proposal notes to assistant turns', () => {
+    const turns = turnsForModel([
+      { role: 'user', content: 'Fix it', at: 'x' },
+      { role: 'assistant', content: 'Done', at: 'x', proposals: [prop] },
+      { role: 'assistant', content: 'Plain', at: 'x' }
+    ])
+    expect(turns).toEqual([
+      { role: 'user', content: 'Fix it' },
+      { role: 'assistant', content: 'Done\n\n[Suggested an edit to notes/ideas.md: accepted]' },
+      { role: 'assistant', content: 'Plain' }
+    ])
   })
 })
