@@ -24,28 +24,33 @@ export function GrammarPopover({ editor }: { editor: TipTapEditor }): React.JSX.
   useEffect(() => {
     const dom = editor.view.dom
 
-    const show = (event: MouseEvent): boolean => {
+    const lintUnder = (event: MouseEvent): Open | null => {
       const target = event.target
-      if (!(target instanceof Element)) return false
+      if (!(target instanceof Element)) return null
       const mark = target.closest('.cb-grammar')
-      if (!mark || !dom.contains(mark)) return false
+      if (!mark || !dom.contains(mark)) return null
       let found: FoundLint | null
       try {
         found = grammarLintAt(editor.state, editor.view.posAtDOM(mark, 0))
       } catch {
-        return false
+        return null
       }
-      if (!found) return false
+      if (!found) return null
       const rect = mark.getBoundingClientRect()
-      setOpen({ found, x: rect.left, y: rect.bottom + 4 })
-      return true
+      return { found, x: rect.left, y: rect.bottom + 4 }
     }
 
     const onClick = (event: MouseEvent): void => {
-      show(event)
+      const hit = lintUnder(event)
+      if (hit) setOpen(hit)
     }
+    // Right-click takes over only when there is a fix to offer; otherwise the
+    // native menu (with Chromium's spelling suggestions) shows as usual.
     const onContextMenu = (event: MouseEvent): void => {
-      if (show(event)) event.preventDefault()
+      const hit = lintUnder(event)
+      if (!hit || hit.found.lint.suggestions.length === 0) return
+      event.preventDefault()
+      setOpen(hit)
     }
     dom.addEventListener('click', onClick)
     dom.addEventListener('contextmenu', onContextMenu)

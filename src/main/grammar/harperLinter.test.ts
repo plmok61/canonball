@@ -35,6 +35,15 @@ describe('real Harper', () => {
     expect(lints).toHaveLength(1)
   })
 
+  it('does not flag long sentences', async () => {
+    const sentence =
+      'The old man walked slowly down the long road toward the village where his daughter ' +
+      'lived with her husband and their three small children in a little house near the ' +
+      'river that ran past the mill and the church and the school on the hill above the town square.'
+    expect(sentence.split(' ').length).toBeGreaterThanOrEqual(45)
+    expect(await linter.lint([sentence])).toEqual([[]])
+  })
+
   it('returns one result array per text, in order', async () => {
     const out = await linter.lint(['Fine.', 'i went.'])
     expect(out).toHaveLength(2)

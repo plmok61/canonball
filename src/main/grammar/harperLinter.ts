@@ -15,8 +15,11 @@ export interface TextLinter {
 
 const MAX_SUGGESTIONS = 5
 
-/** Harper lint kinds that Chromium's spellchecker owns; these are dropped in main. */
-export const SPELLING_KINDS: ReadonlySet<string> = new Set(['Spelling', 'Typo'])
+/**
+ * Harper lint kinds dropped in main: spelling is Chromium's; readability is
+ * style, not grammar.
+ */
+export const DROPPED_KINDS: ReadonlySet<string> = new Set(['Spelling', 'Typo', 'Readability'])
 
 function normalizeSuggestion(
   kind: number,
@@ -67,14 +70,15 @@ export async function createHarperLinter(): Promise<TextLinter> {
   const linter = new LocalLinter({ binary, dialect: Dialect.American })
   await linter.setup()
   // Chromium owns spelling; Harper's SpellCheck would also flag "grey" etc.
+  // LongSentences underlines whole sentences with no fix: style, not grammar.
   const config = await linter.getLintConfig()
-  await linter.setLintConfig({ ...config, SpellCheck: false })
+  await linter.setLintConfig({ ...config, SpellCheck: false, LongSentences: false })
   return {
     async lint(texts) {
       const out: GrammarLint[][] = []
       for (const text of texts) {
         const lints = await linter.lint(text, { language: 'plaintext' })
-        out.push(lints.filter((l) => !SPELLING_KINDS.has(l.lint_kind())).map(toGrammarLint))
+        out.push(lints.filter((l) => !DROPPED_KINDS.has(l.lint_kind())).map(toGrammarLint))
       }
       return out
     }

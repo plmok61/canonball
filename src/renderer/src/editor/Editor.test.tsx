@@ -442,6 +442,34 @@ it('right-clicking an underline opens the popover and suppresses the native menu
   expect(await screen.findByRole('dialog', { name: 'Grammar suggestion' })).toBeInTheDocument()
 })
 
+it('right-click on an underline with no fixes leaves the native menu alone', async () => {
+  const api = stub('She saw the the cat.\n')
+  api.lintGrammar.mockImplementation(async (texts: string[]) =>
+    texts.map((t) => {
+      const at = t.indexOf('the the')
+      return at === -1
+        ? []
+        : [
+            {
+              start: at,
+              end: at + 7,
+              problem: 'the the',
+              message: 'Repeated word.',
+              kind: 'Repetition',
+              suggestions: []
+            }
+          ]
+    })
+  )
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  await ready()
+  const el = await underlined()
+  const notCancelled = fireEvent.contextMenu(el)
+  expect(notCancelled).toBe(true)
+  await new Promise((r) => setTimeout(r, 10))
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
 it('Escape closes the popover without changing the text', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
