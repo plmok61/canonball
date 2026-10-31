@@ -142,7 +142,7 @@ function App(): React.JSX.Element {
     if (!project || !access || saving.current) return
     if (
       !access.needsProsePrompt &&
-      prose.length === access.settings.prose.length &&
+      new Set(prose).size === new Set(access.settings.prose).size &&
       prose.every((p) => access.settings.prose.includes(p))
     ) {
       setProseOpen(false)

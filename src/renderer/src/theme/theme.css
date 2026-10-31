@@ -5,6 +5,7 @@
   --bg-sidebar: #f7f6f3;
   --bg-chat: #fbfbfa;
   --border: #e3e3e3;
+  --scrim: rgba(40, 30, 20, 0.35);
   --text: #1e1e1e;
   --text-strong: #111111;
   --text-muted: #6f6a62;
@@ -24,6 +25,7 @@
   --bg-sidebar: #161513;
   --bg-chat: #191816;
   --border: #2e2c29;
+  --scrim: rgba(10, 8, 6, 0.6);
   --text: #ddd7cc;
   --text-strong: #ece7dd;
   --text-muted: #9a9386;

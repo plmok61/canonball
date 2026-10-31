@@ -50,7 +50,13 @@ export function ProseDialog({ tree, initial, onDone, onCancel, busy }: Props): R
     })
 
   const all = [...folders, ...files]
-  const done = (): void => onDone(all.map((r) => r.relPath).filter((p) => ticked.has(p)))
+  // Entries with no row (orphaned or hand-edited paths) stay protected.
+  const rowPaths = new Set(all.map((r) => r.relPath))
+  const done = (): void =>
+    onDone([
+      ...all.map((r) => r.relPath).filter((p) => ticked.has(p)),
+      ...initial.filter((p) => !rowPaths.has(p))
+    ])
 
   const item = (r: Row, first: boolean): React.JSX.Element => (
     <li key={r.relPath} style={{ paddingLeft: r.depth * 16 }}>

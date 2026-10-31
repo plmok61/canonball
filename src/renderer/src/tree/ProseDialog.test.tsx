@@ -55,3 +55,10 @@ it('offers Cancel and Escape only when onCancel is given', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onCancel).toHaveBeenCalledTimes(2)
 })
+
+it("keeps prose entries the dialog doesn't list", () => {
+  const onDone = vi.fn()
+  render(<ProseDialog tree={tree} initial={['drafts', 'drafts/ch1.md', 'gone']} onDone={onDone} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  expect(onDone).toHaveBeenCalledWith(['drafts', 'drafts/ch1.md', 'gone'])
+})

@@ -308,3 +308,17 @@ it('hides Prose folders… when settings are unreadable', async () => {
   await screen.findByTestId('tree-panel')
   expect(screen.queryByRole('button', { name: 'Prose folders…' })).toBeNull()
 })
+
+it("doesn't write when the prose list is unchanged, even with unlisted entries", async () => {
+  const api = stub('/p')
+  const access = {
+    ...noAccess,
+    settings: { version: 1, prose: ['drafts', 'drafts/ch1.md'], access: {} }
+  }
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access })
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(api.setProsePaths).not.toHaveBeenCalled()
+})
