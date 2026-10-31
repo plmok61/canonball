@@ -23,6 +23,12 @@ export interface AppSettings {
   theme: ThemeSetting
 }
 
+/** The renderer's reply to a flush request before the window closes. */
+export interface FlushResult {
+  ok: boolean
+  error?: string
+}
+
 export interface CanonballApi {
   openProjectDialog(): Promise<ProjectInfo | null>
   newProjectDialog(): Promise<ProjectInfo | null>

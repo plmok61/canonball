@@ -1,14 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CanonballApi } from '../shared/types'
+import type { CanonballApi, FlushResult } from '../shared/types'
 
 let flushHandler: (() => Promise<void>) | null = null
 
 ipcRenderer.on('canonball:flush-request', async () => {
+  let result: FlushResult = { ok: true }
   try {
     if (flushHandler) await flushHandler()
-  } finally {
-    ipcRenderer.send('canonball:flush-done')
+  } catch (e) {
+    result = { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
+  ipcRenderer.send('canonball:flush-done', result)
 })
 
 const api: CanonballApi = {

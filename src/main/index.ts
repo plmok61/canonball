@@ -1,11 +1,11 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { applyStoredTheme, registerIpc } from './ipc'
-import { createCloseHandler } from './closeFlush'
-
-let quitting = false
+import { app, dialog, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { applyStoredTheme, registerIpc } from './ipc'
+import { createCloseHandler, type FlushResult } from './closeFlush'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+
+let quitting = false
 
 function createWindow(): void {
   // Create the browser window.
@@ -29,8 +29,9 @@ function createWindow(): void {
     createCloseHandler({
       requestFlush: () => mainWindow.webContents.send('canonball:flush-request'),
       onFlushDone: (cb) => {
-        const listener = (e: Electron.IpcMainEvent): void => {
-          if (e.sender === mainWindow.webContents) cb()
+        const listener = (e: Electron.IpcMainEvent, result?: FlushResult): void => {
+          if (e.sender !== mainWindow.webContents) return
+          cb(typeof result?.ok === 'boolean' ? result : { ok: false, error: 'Invalid reply' })
         }
         ipcMain.on('canonball:flush-done', listener)
         return () => ipcMain.removeListener('canonball:flush-done', listener)
@@ -39,11 +40,26 @@ function createWindow(): void {
         const t = setTimeout(cb, 3000)
         return () => clearTimeout(t)
       },
+      confirmQuitAnyway: async (detail) => {
+        if (mainWindow.isDestroyed()) return true
+        const { response } = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          message: "Some changes couldn't be saved.",
+          detail,
+          buttons: ['Quit Anyway', 'Cancel'],
+          defaultId: 1,
+          cancelId: 1
+        })
+        return response === 0
+      },
       closeWindow: () => {
         if (!mainWindow.isDestroyed()) mainWindow.close()
       },
       quitApp: () => app.quit(),
-      isQuitting: () => quitting
+      isQuitting: () => quitting,
+      cancelQuit: () => {
+        quitting = false
+      }
     })
   )
 
