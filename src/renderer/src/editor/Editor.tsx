@@ -64,7 +64,7 @@ function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
   useEffect(() => {
     if (!editor) return
     let cancelled = false
-    settleOrphan(relPath)
+    settleOrphan(root, relPath)
       .then(async (adopted) => ({ adopted, file: await window.canonball.readDoc(relPath) }))
       .then(({ adopted, file }) => {
         if (cancelled || editor.isDestroyed) return
@@ -92,7 +92,7 @@ function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
     return () => {
       cancelled = true
       unregister()
-      if (autosave.current) orphan(relPath, autosave.current)
+      if (autosave.current) orphan(root, relPath, autosave.current)
     }
     // makeAutosave closes over root and relPath only, which are fixed for this instance
     // eslint-disable-next-line react-hooks/exhaustive-deps

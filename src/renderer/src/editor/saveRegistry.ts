@@ -9,9 +9,11 @@ interface Orphan {
 
 /**
  * Autosaves whose editor is gone but whose text has not reached disk yet.
- * At most one per path, so there is only ever one writer for a file.
+ * Keyed by project root and path, at most one per file, so there is only ever one writer for a file.
  */
 const orphans = new Map<string, Orphan>()
+
+const keyOf = (root: string, relPath: string): string => `${root}\0${relPath}`
 
 /** The open editor's autosave, so whole-app flushes (project switch) include it. */
 let live: (() => Autosave | null) | null = null
@@ -27,7 +29,8 @@ export function registerLive(source: () => Autosave | null): () => void {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 /** Take over an Autosave on unmount: keep retrying until its text is saved. */
-export function orphan(path: string, autosave: Autosave): void {
+export function orphan(root: string, relPath: string, autosave: Autosave): void {
+  const path = keyOf(root, relPath)
   autosave.detach()
   if (!autosave.dirty) return
   const previous = orphans.get(path)?.done ?? Promise.resolve()
@@ -49,11 +52,12 @@ export function orphan(path: string, autosave: Autosave): void {
 
 /**
  * Called before a file is opened. Waits for a pending orphan save of the same
- * path to finish. If it still cannot save, removes the orphan and returns its
+ * file in the same project to finish. If it still cannot save, removes the orphan and returns its
  * unsaved text so the new editor can adopt it (the new editor becomes the one
  * writer). Returns null when nothing needs adopting.
  */
-export async function settleOrphan(path: string): Promise<string | null> {
+export async function settleOrphan(root: string, relPath: string): Promise<string | null> {
+  const path = keyOf(root, relPath)
   const entry = orphans.get(path)
   if (!entry) return null
   try {
