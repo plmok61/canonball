@@ -23,7 +23,12 @@ function stub(
   lastProjectRoot: string | null,
   newProjectDialog: Mock = vi.fn()
 ): Record<
-  'openProjectDialog' | 'newProjectDialog' | 'openProject' | 'setPathAccess' | 'getProjectAccess',
+  | 'openProjectDialog'
+  | 'newProjectDialog'
+  | 'openProject'
+  | 'setPathAccess'
+  | 'getProjectAccess'
+  | 'setProsePaths',
   Mock
 > {
   const info = { root: '/p', name: 'p', tree: [], access: noAccess }
@@ -228,4 +233,78 @@ it("shows the new project's access after a switch", async () => {
   await waitFor(async () => expect(await canonBadge()).toHaveTextContent('👁'))
   act(() => menu!('open-project'))
   await waitFor(async () => expect(await canonBadge()).toHaveTextContent('✎'))
+})
+
+const draftsTree = [
+  {
+    name: 'drafts',
+    relPath: 'drafts',
+    kind: 'folder' as const,
+    children: [] as never[]
+  }
+]
+
+it('asks which folders hold prose when the project has no settings', async () => {
+  const api = stub('/p')
+  const prompt = { ...noAccess, needsProsePrompt: true }
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access: prompt })
+  api.setProsePaths.mockResolvedValue({
+    ...noAccess,
+    settings: { version: 1, prose: ['drafts'], access: {} }
+  })
+  render(<App />)
+  expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeChecked()
+  expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  await waitFor(() => expect(api.setProsePaths).toHaveBeenCalledWith('/p', ['drafts']))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
+it('does not ask when settings exist', async () => {
+  stub('/p')
+  render(<App />)
+  await screen.findByTestId('tree-panel')
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+it('Prose folders… reopens the dialog', async () => {
+  const api = stub('/p')
+  const access = { ...noAccess, settings: { version: 1, prose: ['drafts'], access: {} } }
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access })
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
+  expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(api.setProsePaths).not.toHaveBeenCalled()
+})
+
+it('keeps the dialog open and shows the error when saving prose folders fails', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: draftsTree,
+    access: { ...noAccess, needsProsePrompt: true }
+  })
+  api.setProsePaths.mockRejectedValue(new Error('disk full'))
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+  expect(await screen.findByText('disk full')).toBeInTheDocument()
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled())
+})
+
+it('hides Prose folders… when settings are unreadable', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: [],
+    access: { ...noAccess, unreadable: true }
+  })
+  render(<App />)
+  await screen.findByTestId('tree-panel')
+  expect(screen.queryByRole('button', { name: 'Prose folders…' })).toBeNull()
 })

@@ -128,3 +128,61 @@ body {
   color: var(--accent-warn);
   font-size: 12px;
 }
+
+.cb-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.cb-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 90vw);
+  max-height: 80vh;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.cb-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.cb-dialog h3 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cb-dialog p {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.cb-dialog-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.cb-dialog-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.cb-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

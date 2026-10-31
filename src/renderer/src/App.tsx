@@ -3,8 +3,9 @@ import type { ProjectAccess, ProjectInfo, TreeNode } from '../../shared/types'
 import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
-import { nextAccess } from '../../shared/access'
+import { isProse, nextAccess } from '../../shared/access'
 import { FileTree } from './tree/FileTree'
+import { ProseDialog } from './tree/ProseDialog'
 import { sortTree } from './tree/sortTree'
 import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
@@ -26,6 +27,8 @@ function App(): React.JSX.Element {
   const [accessState, setAccessState] = useState<{ root: string; access: ProjectAccess } | null>(
     null
   )
+  const [proseOpen, setProseOpen] = useState(false)
+  const [proseBusy, setProseBusy] = useState(false)
   const switching = useRef(false)
   const saving = useRef(false)
 
@@ -51,6 +54,7 @@ function App(): React.JSX.Element {
           setSelectedPath(null)
           setRefreshed(null)
           setAccessState(null)
+          setProseOpen(false)
           setProject(info)
         }
       } catch (e) {
@@ -134,6 +138,32 @@ function App(): React.JSX.Element {
       })
   }
 
+  const saveProse = (prose: string[]): void => {
+    if (!project || !access || saving.current) return
+    if (
+      !access.needsProsePrompt &&
+      prose.length === access.settings.prose.length &&
+      prose.every((p) => access.settings.prose.includes(p))
+    ) {
+      setProseOpen(false)
+      return
+    }
+    saving.current = true
+    setProseBusy(true)
+    const at = project.root
+    window.canonball
+      .setProsePaths(at, prose)
+      .then((next) => {
+        setAccessState({ root: at, access: next })
+        setProseOpen(false)
+      })
+      .catch((e) => setError(message(e)))
+      .finally(() => {
+        saving.current = false
+        setProseBusy(false)
+      })
+  }
+
   if (!ready) return <div className="app" />
 
   if (!project) {
@@ -151,6 +181,25 @@ function App(): React.JSX.Element {
       </div>
     )
   }
+
+  const prompting = !!access && access.needsProsePrompt && !access.unreadable
+  const dialog =
+    access && !access.unreadable && (prompting || proseOpen) ? (
+      <ProseDialog
+        key={prompting ? 'first' : 'edit'}
+        tree={sorted}
+        initial={
+          prompting
+            ? sorted.some((n) => n.kind === 'folder' && n.name === 'drafts')
+              ? ['drafts']
+              : []
+            : access.settings.prose
+        }
+        onDone={saveProse}
+        onCancel={prompting ? undefined : () => setProseOpen(false)}
+        busy={proseBusy}
+      />
+    ) : null
 
   return (
     <div className="app">
@@ -173,16 +222,26 @@ function App(): React.JSX.Element {
           onCycle={cycle}
         />
         <footer className="cb-tree-footer">
+          {!access?.unreadable && (
+            <button type="button" onClick={() => setProseOpen(true)}>
+              Prose folders…
+            </button>
+          )}
           <ThemePicker value={theme} onChange={setTheme} />
         </footer>
       </aside>
       <main data-testid="editor-panel">
         {selectedPath ? (
-          <Editor root={project.root} relPath={selectedPath} />
+          <Editor
+            root={project.root}
+            relPath={selectedPath}
+            isProse={isProse((access ?? project.access).settings, selectedPath)}
+          />
         ) : (
           <p className="editor-empty">Choose a file from the project</p>
         )}
       </main>
+      {dialog}
       <aside data-testid="chat-panel">
         <ChatPlaceholder />
       </aside>
