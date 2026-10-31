@@ -32,10 +32,13 @@ body {
 }
 
 [data-testid='chat-panel'] {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
   background: var(--bg-chat);
   border-left: 1px solid var(--border);
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .cb-row {

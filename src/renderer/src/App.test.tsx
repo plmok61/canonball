@@ -45,6 +45,12 @@ function stub(
       encryptionAvailable: true
     }),
     listModels: vi.fn().mockResolvedValue({ models: [], errors: [] }),
+    listChats: vi.fn().mockResolvedValue([]),
+    loadChat: vi.fn(),
+    saveChat: vi.fn().mockResolvedValue(undefined),
+    startChat: vi.fn().mockResolvedValue(undefined),
+    cancelChat: vi.fn().mockResolvedValue(undefined),
+    onChatEvent: vi.fn(() => () => {}),
     getProjectAccess: vi.fn().mockResolvedValue(noAccess),
     setPathAccess: vi.fn().mockResolvedValue(noAccess),
     setProsePaths: vi.fn().mockResolvedValue(noAccess),
@@ -73,7 +79,19 @@ it('renders tree, editor and chat panels', async () => {
   render(<App />)
   expect(await screen.findByTestId('tree-panel')).toBeInTheDocument()
   expect(screen.getByTestId('editor-panel')).toBeInTheDocument()
-  expect(screen.getByTestId('chat-panel')).toHaveTextContent('AI chat arrives in a later phase')
+  const chat = screen.getByTestId('chat-panel')
+  expect(within(chat).getByLabelText('Message')).toBeInTheDocument()
+  expect(
+    await within(chat).findByText('Add an AI connection in Settings to start chatting.')
+  ).toBeInTheDocument()
+})
+
+it('the chat panel gear opens AI settings', async () => {
+  stub('/p')
+  render(<App />)
+  const chat = await screen.findByTestId('chat-panel')
+  fireEvent.click(within(chat).getByRole('button', { name: 'AI settings' }))
+  expect(await screen.findByRole('dialog', { name: 'AI connections' })).toBeInTheDocument()
 })
 
 it('shows welcome screen when no last project', async () => {

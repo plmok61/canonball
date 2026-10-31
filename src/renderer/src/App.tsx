@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectAccess, ProjectInfo, TreeNode } from '../../shared/types'
-import ChatPlaceholder from './chat/ChatPlaceholder'
+import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
 import { isProse, nextAccess } from '../../shared/access'
@@ -34,7 +34,7 @@ function App(): React.JSX.Element {
   const [proseError, setProseError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Bumped whenever an AI connection changes; the chat panel reloads on it.
-  const [, setAiVersion] = useState(0)
+  const [aiVersion, setAiVersion] = useState(0)
   const switching = useRef(false)
   const saving = useRef(false)
 
@@ -280,7 +280,12 @@ function App(): React.JSX.Element {
       {dialog}
       {settingsDialog}
       <aside data-testid="chat-panel">
-        <ChatPlaceholder />
+        <ChatPanel
+          key={project.root}
+          root={project.root}
+          aiVersion={aiVersion}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       </aside>
     </div>
   )
