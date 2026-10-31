@@ -7,7 +7,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 ## Build phases
 
-- [ ] **Phase 2: Writing aids.** Spellcheck and Harper grammar (plan to write)
 - [ ] **Phase 3: AI permissions.** Badges, prose folders, access layer (plan to write)
 - [ ] **Phase 4: AI connection & chat.** Providers, Keychain, model picker, chat (plan to write)
 - [ ] **Phase 5: AI file tools & proposals.** Tools, Accept/Reject cards, style rules (plan to write)
@@ -20,7 +19,15 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - Known round-trip residuals: CRLF files come back with mixed line endings; inline HTML inside bold/italic splits the emphasis; first save normalizes syntax (e.g. `_em_` → `*em*`).
 - `writeDoc` has no expected-mtime precondition: external changes are only detected on window focus. Add one before Phase 5 lets the AI write files.
 - Dev environment: `~/.npm` has root-owned files (fix with `sudo chown -R 501:20 ~/.npm`); the Electron binary may need `npx install-electron` after install.
-- Save registry: orphaned saves are keyed by relPath only. Key them by project root + relPath so a stuck save from one project can never be adopted into the same-named file in another (practically unreachable today because the project dialogs are modal).
+- Phase 2 (writing aids):
+  - harper.js is pinned at 2.13.0 and runs in an Electron `utilityProcess` (`src/main/grammar/`), linting paragraph text with `language: 'plaintext'`.
+  - Spelling is Chromium's job. Harper's `SpellCheck` rule is off, and lints of kind `Spelling`/`Typo` are dropped. The dialect is fixed to American; a dialect setting is future work.
+  - Ignored grammar lints last for the session only, and are not saved.
+  - The grammar popover is mouse-only; keyboard access is future work. It also isn't clamped to the viewport.
+  - Harper's Node loader reads the WASM via `new URL(...).pathname`. A checkout path containing spaces (percent-encoded) would break loading. The packaged app in `/Applications` is fine.
+  - Packaged check: `npm run build:unpack` works, and Harper loads from `app.asar`. Signing and notarization are Phase 7.
+  - The grammar service has no request timeout. A hung Harper call would leave that request pending, though later edits still lint.
+  - macOS gives some misspellings (e.g. "teh") no suggestions. That is OS dictionary behaviour.
 
 ## Decide later (after using the app)
 
