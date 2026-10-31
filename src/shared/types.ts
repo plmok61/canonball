@@ -1,4 +1,4 @@
-import type { ModelChoice } from './ai'
+import type { AiStatus, ChatEvent, ChatRequest, CloudProvider, ModelChoice, ModelList } from './ai'
 export interface TreeNode {
   name: string
   relPath: string
@@ -89,4 +89,18 @@ export interface CanonballApi {
   onFlushRequest(handler: () => Promise<void>): void
   /** Subscribe to application menu commands; returns an unsubscribe. */
   onMenuCommand(handler: (command: MenuCommand) => void): () => void
+  /** Key presence only (booleans); key text never reaches the renderer. */
+  getAiStatus(): Promise<AiStatus>
+  /** `null` removes the key. */
+  setApiKey(provider: CloudProvider, key: string | null): Promise<AiStatus>
+  /** `null` clears the local server URL. */
+  setLocalUrl(url: string | null): Promise<AiStatus>
+  setModel(choice: ModelChoice | null): Promise<AiStatus>
+  /** Models from configured providers; one failing doesn't hide the others. */
+  listModels(): Promise<ModelList>
+  /** Starts a stream; events arrive on onChatEvent. */
+  startChat(req: ChatRequest): Promise<void>
+  cancelChat(requestId: string): Promise<void>
+  /** Subscribe to chat stream events; returns an unsubscribe. */
+  onChatEvent(handler: (e: ChatEvent) => void): () => void
 }

@@ -1,11 +1,21 @@
-import { app, dialog, ipcMain, nativeTheme, BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, safeStorage, BrowserWindow } from 'electron'
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import { loadProjectAccess, setPathAccess, setProsePaths } from './projectSettings'
 import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
-import type { Access, AppSettings, GrammarLint, ProjectInfo } from '../shared/types'
+import { createSecretStore } from './ai/secrets'
+import { createAiConfig, type AiConfig } from './ai/aiConfig'
+import { createChatService, type ChatService } from './ai/chatService'
+import {
+  CLOUD_PROVIDERS,
+  parseChatRequest,
+  parseModelChoice,
+  type CloudProvider,
+  type ModelChoice
+} from '../shared/ai'
+import type { Access, AppSettings, GrammarLint, ProjectInfo, ThemeSetting } from '../shared/types'
 
 let currentRoot: string | null = null
 
@@ -22,6 +32,43 @@ function settingsFile(): string {
 let settingsStore: SettingsStore | null = null
 function settings(): SettingsStore {
   return (settingsStore ??= createSettingsStore(settingsFile()))
+}
+
+let aiConfig: AiConfig | null = null
+function ai(): AiConfig {
+  return (aiConfig ??= createAiConfig({
+    settings: settings(),
+    secrets: createSecretStore(join(app.getPath('userData'), 'secrets.json'), safeStorage),
+    fetch: (input, init) => fetch(input, init)
+  }))
+}
+
+let chatService: ChatService | null = null
+function chat(): ChatService {
+  return (chatService ??= createChatService({
+    resolve: (p) => ai().resolve(p),
+    fetch: (input, init) => fetch(input, init)
+  }))
+}
+
+/** Stop every streaming reply (project switch, window close). */
+export function cancelAllChats(): void {
+  chatService?.cancelAll()
+}
+
+const THEMES: readonly string[] = ['light', 'dark', 'system']
+function isTheme(x: unknown): x is ThemeSetting {
+  return typeof x === 'string' && THEMES.includes(x)
+}
+
+function isCloudProvider(x: unknown): x is CloudProvider {
+  return typeof x === 'string' && (CLOUD_PROVIDERS as readonly string[]).includes(x)
+}
+
+function stringOrNull(x: unknown): string | null {
+  if (x === null) return null
+  if (typeof x === 'string') return x
+  throw new Error('Invalid argument')
 }
 
 function isAccess(a: unknown): a is Access {
@@ -42,6 +89,7 @@ async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
 async function openProject(root: string): Promise<ProjectInfo> {
   if (!(await stat(root)).isDirectory()) throw new Error('Not a directory')
   const tree = await listTree(root)
+  cancelAllChats()
   currentRoot = root
   await updateSettings({ lastProjectRoot: root })
   return { root, name: basename(root), tree, access: await loadProjectAccess(root) }
@@ -102,7 +150,37 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
     grammar.lint(parseLintRequest(texts))
   )
   ipcMain.handle('canonball:getSettings', () => settings().load())
-  ipcMain.handle('canonball:setSettings', (_e, patch: Partial<AppSettings>) =>
-    updateSettings(patch)
-  )
+  // AI settings change only through the dedicated channels below.
+  ipcMain.handle('canonball:setSettings', (_e, patch: unknown) => {
+    const theme = (patch as { theme?: unknown } | null)?.theme
+    return isTheme(theme) ? updateSettings({ theme }) : settings().load()
+  })
+
+  ipcMain.handle('canonball:getAiStatus', () => ai().status())
+  ipcMain.handle('canonball:setApiKey', (_e, provider: unknown, key: unknown) => {
+    if (!isCloudProvider(provider)) throw new Error('Invalid argument')
+    return ai().setApiKey(provider, stringOrNull(key))
+  })
+  ipcMain.handle('canonball:setLocalUrl', (_e, url: unknown) => ai().setLocalUrl(stringOrNull(url)))
+  ipcMain.handle('canonball:setModel', (_e, choice: unknown) => {
+    let parsed: ModelChoice | null = null
+    if (choice !== null) {
+      parsed = parseModelChoice(choice)
+      if (!parsed) throw new Error('Invalid argument')
+    }
+    return ai().setModel(parsed)
+  })
+  ipcMain.handle('canonball:listModels', () => ai().listModels())
+  ipcMain.handle('canonball:startChat', (e, req: unknown) => {
+    const parsed = parseChatRequest(req)
+    if (!parsed) throw new Error('Invalid argument')
+    const wc = e.sender
+    chat().start(parsed, (ev) => {
+      if (!wc.isDestroyed()) wc.send('canonball:chatEvent', ev)
+    })
+  })
+  ipcMain.handle('canonball:cancelChat', (_e, requestId: unknown) => {
+    if (typeof requestId !== 'string') throw new Error('Invalid argument')
+    chat().cancel(requestId)
+  })
 }

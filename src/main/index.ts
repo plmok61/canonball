@@ -1,6 +1,6 @@
 import { app, dialog, shell, BrowserWindow, ipcMain, Menu, utilityProcess } from 'electron'
 import { join } from 'path'
-import { applyStoredTheme, registerIpc } from './ipc'
+import { applyStoredTheme, cancelAllChats, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
 import { buildMenuTemplate } from './menu'
 import { buildContextMenuTemplate } from './contextMenu'
@@ -72,6 +72,9 @@ function createWindow(): void {
       }
     })
   )
+
+  // Closing the window stops any streaming reply.
+  mainWindow.on('closed', cancelAllChats)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

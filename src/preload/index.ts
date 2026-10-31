@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { CanonballApi, FlushResult, MenuCommand } from '../shared/types'
+import type { ChatEvent } from '../shared/ai'
 
 let flushHandler: (() => Promise<void>) | null = null
 
@@ -36,6 +37,20 @@ const api: CanonballApi = {
     ipcRenderer.on('canonball:menu', listener)
     return () => {
       ipcRenderer.removeListener('canonball:menu', listener)
+    }
+  },
+  getAiStatus: () => ipcRenderer.invoke('canonball:getAiStatus'),
+  setApiKey: (provider, key) => ipcRenderer.invoke('canonball:setApiKey', provider, key),
+  setLocalUrl: (url) => ipcRenderer.invoke('canonball:setLocalUrl', url),
+  setModel: (choice) => ipcRenderer.invoke('canonball:setModel', choice),
+  listModels: () => ipcRenderer.invoke('canonball:listModels'),
+  startChat: (req) => ipcRenderer.invoke('canonball:startChat', req),
+  cancelChat: (requestId) => ipcRenderer.invoke('canonball:cancelChat', requestId),
+  onChatEvent: (handler) => {
+    const listener = (_e: Electron.IpcRendererEvent, event: ChatEvent): void => handler(event)
+    ipcRenderer.on('canonball:chatEvent', listener)
+    return () => {
+      ipcRenderer.removeListener('canonball:chatEvent', listener)
     }
   }
 }
