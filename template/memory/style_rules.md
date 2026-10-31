@@ -28,6 +28,6 @@ Apply these rules whenever generating prose drafts or dialogue.
 - Avoid clichéd romantic gestures. Create specific physical interactions that fit these characters.
 - Write natural dialogue. Avoid self-answering questions and mirror-response patterns.
 
-**Why:** These are common AI writing patterns that make fiction feel generic and mechanical. Sourced from community-compiled research (see `AI-isms-guide.md` and `memory/ai-isms.json`).
+**Why:** These are common AI writing patterns that make fiction feel generic and mechanical. Sourced from community-compiled research (see `docs/reference/AI-isms-guide.md` and `docs/reference/ai-isms.json`).
 
 **How to apply:** Check this list before writing any prose draft or dialogue. If a sentence triggers one of the hard rules, rewrite it before moving on.
