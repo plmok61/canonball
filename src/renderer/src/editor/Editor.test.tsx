@@ -39,8 +39,9 @@ afterEach(() => {
 function stub(
   content = 'Hello world\n',
   mtimeMs = 1
-): Record<'readDoc' | 'writeDoc' | 'onFlushRequest', Mock> {
+): Record<'readDoc' | 'writeDoc' | 'onFlushRequest' | 'lintGrammar', Mock> {
   const api = {
+    lintGrammar: vi.fn(async (texts: string[]) => texts.map(() => [])),
     readDoc: vi.fn().mockResolvedValue({ content, mtimeMs }),
     writeDoc: vi.fn().mockResolvedValue({ content: '', mtimeMs: 2 }),
     onFlushRequest: vi.fn()
@@ -365,4 +366,102 @@ it('hints and raw nodes opt out of spellcheck', async () => {
   const nodes = document.querySelectorAll('.cb-hint, .cb-raw')
   expect(nodes.length).toBeGreaterThan(0)
   nodes.forEach((n) => expect(n).toHaveAttribute('spellcheck', 'false'))
+})
+
+function flagTheThe(stubApi: ReturnType<typeof stub>): void {
+  stubApi.lintGrammar.mockImplementation(async (texts: string[]) =>
+    texts.map((t) => {
+      const at = t.indexOf('the the')
+      return at === -1
+        ? []
+        : [
+            {
+              start: at,
+              end: at + 7,
+              problem: 'the the',
+              message: 'Repeated word.',
+              kind: 'Repetition',
+              suggestions: [{ label: 'the', replacement: 'the' }]
+            }
+          ]
+    })
+  )
+}
+
+async function underlined(): Promise<Element> {
+  return waitFor(
+    () => {
+      const el = document.querySelector('.cb-grammar')
+      if (!el) throw new Error('no underline yet')
+      return el
+    },
+    { timeout: 3000 }
+  )
+}
+
+it('linting never writes the file', async () => {
+  const api = stub('She saw the the cat.\n')
+  flagTheThe(api)
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  await ready()
+  await underlined()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(api.writeDoc).not.toHaveBeenCalled()
+})
+
+it('clicking an underline shows the message and fixes; choosing one fixes the text and saves', async () => {
+  const api = stub('She saw the the cat.\n')
+  flagTheThe(api)
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  const editor = await ready()
+  fireEvent.click(await underlined())
+  const dialog = await screen.findByRole('dialog', { name: 'Grammar suggestion' })
+  expect(dialog).toHaveTextContent('Repeated word.')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  fireEvent.click(screen.getByRole('button', { name: 'the' }))
+  expect(editor.state.doc.textContent).toBe('She saw the cat.')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(api.writeDoc).toHaveBeenCalledTimes(1)
+  expect(api.writeDoc.mock.calls[0][2]).toContain('She saw the cat.')
+})
+
+it('right-clicking an underline opens the popover and suppresses the native menu', async () => {
+  const api = stub('She saw the the cat.\n')
+  flagTheThe(api)
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  await ready()
+  const el = await underlined()
+  const notCancelled = fireEvent.contextMenu(el)
+  expect(notCancelled).toBe(false)
+  expect(await screen.findByRole('dialog', { name: 'Grammar suggestion' })).toBeInTheDocument()
+})
+
+it('Escape closes the popover without changing the text', async () => {
+  const api = stub('She saw the the cat.\n')
+  flagTheThe(api)
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  const editor = await ready()
+  fireEvent.click(await underlined())
+  await screen.findByRole('dialog')
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(editor.state.doc.textContent).toBe('She saw the the cat.')
+})
+
+it('Ignore removes the underline', async () => {
+  const api = stub('She saw the the cat.\n')
+  flagTheThe(api)
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  const editor = await ready()
+  fireEvent.click(await underlined())
+  fireEvent.click(await screen.findByRole('button', { name: 'Ignore' }))
+  expect(document.querySelector('.cb-grammar')).toBeNull()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(editor.state.doc.textContent).toBe('She saw the the cat.')
 })

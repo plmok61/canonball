@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import type { Editor as TipTapEditor } from '@tiptap/core'
+import { Grammar } from '../grammar/grammarExtension'
+import { GrammarPopover } from '../grammar/GrammarPopover'
 import { Autosave } from './autosave'
 import { createExtensions } from './extensions'
 import { loadIntoEditor, serializeEditor, type OpenDoc } from './markdown'
@@ -31,7 +33,13 @@ export function Editor({ root, relPath }: EditorProps): React.JSX.Element {
 }
 
 function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
-  const extensions = useMemo(() => createExtensions(), [])
+  const extensions = useMemo(
+    () => [
+      ...createExtensions(),
+      Grammar.configure({ lint: (t) => window.canonball.lintGrammar(t), delayMs: 500 })
+    ],
+    []
+  )
   const [loaded, setLoaded] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -139,6 +147,7 @@ function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
       ) : (
         <div className="cb-page-scroll">
           <EditorContent editor={editor} className="cb-page" />
+          {editor && <GrammarPopover editor={editor} />}
         </div>
       )}
       <div className="cb-status">
