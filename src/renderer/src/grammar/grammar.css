@@ -1,0 +1,36 @@
+.cb-grammar {
+  text-decoration: underline wavy var(--lint-grammar);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+}
+
+.cb-grammar-popover {
+  position: fixed;
+  z-index: 20;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.cb-grammar-popover p {
+  margin: 0 0 8px;
+}
+
+.cb-grammar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cb-grammar-actions button {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}

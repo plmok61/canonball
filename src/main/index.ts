@@ -1,13 +1,20 @@
-import { app, dialog, shell, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, dialog, shell, BrowserWindow, ipcMain, Menu, utilityProcess } from 'electron'
 import { join } from 'path'
 import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
 import { buildMenuTemplate } from './menu'
+import { buildContextMenuTemplate } from './contextMenu'
 import { isSafeExternalUrl } from './navigation'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { createGrammarService } from './grammar/grammarService'
+import grammarWorkerPath from './grammar/grammarWorker?modulePath'
 import icon from '../../resources/icon.png?asset'
 
 let quitting = false
+
+const grammar = createGrammarService(() =>
+  utilityProcess.fork(grammarWorkerPath, [], { serviceName: 'Canonball Grammar' })
+)
 
 function createWindow(): void {
   // Create the browser window.
@@ -21,7 +28,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: true
     }
   })
 
@@ -78,6 +86,17 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Right-click: spelling suggestions (Chromium flags, the writer applies) and
+  // cut/copy/paste. No menu when there is nothing to offer.
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const wc = mainWindow.webContents
+    const template = buildContextMenuTemplate(params, {
+      replaceMisspelling: (w) => wc.replaceMisspelling(w),
+      learnWord: (w) => wc.session.addWordToSpellCheckerDictionary(w)
+    })
+    if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: mainWindow })
+  })
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -94,6 +113,8 @@ app.on('before-quit', () => {
   quitting = true
 })
 
+app.on('will-quit', () => grammar.dispose())
+
 app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.canonball.app')
@@ -105,7 +126,7 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpc()
+  registerIpc(grammar)
   await applyStoredTheme()
 
   Menu.setApplicationMenu(

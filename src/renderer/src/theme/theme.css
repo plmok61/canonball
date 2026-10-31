@@ -12,6 +12,7 @@
   --accent-warn: #8a5a00;
   --accent-warn-bg: #fbf3e2;
   --danger: #a63c2a;
+  --lint-grammar: #2b6cb0;
   /* Pressed toolbar buttons, the active picker segment, the selected tree row. */
   --active: #6b6355;
   --active-text: #fdfcfa;
@@ -30,6 +31,7 @@
   --accent-warn: #d9a74a;
   --accent-warn-bg: #33291a;
   --danger: #d98a73;
+  --lint-grammar: #7fa8d8;
   --active: #b8ae9c;
   --active-text: #1c1b19;
 }
