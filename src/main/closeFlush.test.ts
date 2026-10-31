@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { createCloseHandler } from './closeFlush'
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function setup(quitting: boolean) {
   let done: (() => void) | null = null
   let timeoutCb: (() => void) | null = null
