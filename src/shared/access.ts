@@ -89,7 +89,8 @@ export function withProse(s: ProjectSettings, prose: string[]): ProjectSettings 
   return { ...s, prose: [...prose], access }
 }
 
-function validPath(p: unknown): p is string {
+/** The rule for every settings key and prose entry: a non-empty, project-relative path. */
+export function validPath(p: unknown): p is string {
   return (
     typeof p === 'string' &&
     p !== '' &&

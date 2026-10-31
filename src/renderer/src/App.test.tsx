@@ -13,17 +13,26 @@ vi.mock('./editor/saveRegistry', async (importOriginal) => ({
 type MenuCommand = 'open-project' | 'new-project'
 let menu: ((cmd: MenuCommand) => void) | null = null
 
+const noAccess = {
+  settings: { version: 1, prose: [], access: {} },
+  needsProsePrompt: false,
+  unreadable: false
+}
+
 function stub(
   lastProjectRoot: string | null,
   newProjectDialog: Mock = vi.fn()
 ): Record<'openProjectDialog' | 'newProjectDialog', Mock> {
-  const info = { root: '/p', name: 'p', tree: [] }
+  const info = { root: '/p', name: 'p', tree: [], access: noAccess }
   const api = {
     getSettings: vi.fn().mockResolvedValue({ lastProjectRoot, theme: 'system' }),
     openProject: vi.fn().mockResolvedValue(info),
     openProjectDialog: vi.fn(),
     newProjectDialog,
     refreshTree: vi.fn().mockResolvedValue([]),
+    getProjectAccess: vi.fn().mockResolvedValue(noAccess),
+    setPathAccess: vi.fn().mockResolvedValue(noAccess),
+    setProsePaths: vi.fn().mockResolvedValue(noAccess),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
       return () => {
@@ -75,7 +84,8 @@ it('Open Project from the menu awaits the flush before showing the dialog', asyn
   api.openProjectDialog.mockResolvedValue({
     root: '/q',
     name: 'q',
-    tree: [{ name: 'other.md', relPath: 'other.md', kind: 'file' }]
+    tree: [{ name: 'other.md', relPath: 'other.md', kind: 'file' }],
+    access: noAccess
   })
   render(<App />)
   await screen.findByTestId('tree-panel')

@@ -9,6 +9,7 @@ export interface ProjectInfo {
   root: string
   name: string
   tree: TreeNode[]
+  access: ProjectAccess
 }
 
 export interface DocFile {
@@ -76,6 +77,11 @@ export interface CanonballApi {
   writeDoc(root: string, relPath: string, content: string): Promise<DocFile>
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
+  getProjectAccess(): Promise<ProjectAccess>
+  /** Rejects with 'Project changed' if `root` is no longer the open project. */
+  setPathAccess(root: string, relPath: string, access: Access): Promise<ProjectAccess>
+  /** Rejects with 'Project changed' if `root` is no longer the open project. */
+  setProsePaths(root: string, prose: string[]): Promise<ProjectAccess>
   /** One array of lints per input text, in the same order. */
   lintGrammar(texts: string[]): Promise<GrammarLint[][]>
   onFlushRequest(handler: () => Promise<void>): void

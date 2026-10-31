@@ -23,6 +23,10 @@ const api: CanonballApi = {
     ipcRenderer.invoke('canonball:writeDoc', root, relPath, content),
   getSettings: () => ipcRenderer.invoke('canonball:getSettings'),
   setSettings: (patch) => ipcRenderer.invoke('canonball:setSettings', patch),
+  getProjectAccess: () => ipcRenderer.invoke('canonball:getProjectAccess'),
+  setPathAccess: (root, relPath, access) =>
+    ipcRenderer.invoke('canonball:setPathAccess', root, relPath, access),
+  setProsePaths: (root, prose) => ipcRenderer.invoke('canonball:setProsePaths', root, prose),
   lintGrammar: (texts) => ipcRenderer.invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler
