@@ -133,7 +133,9 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
       <div className="cb-status">
         <span>{relPath}</span>
         <span>{words === 1 ? '1 word' : `${words} words`}</span>
-        <span>{failed ? 'not saved — retrying' : dirty ? 'saving…' : 'saved'}</span>
+        <span className={failed ? 'cb-status-failed' : undefined}>
+          {failed ? 'not saved — retrying' : dirty ? 'saving…' : 'saved'}
+        </span>
       </div>
     </div>
   )

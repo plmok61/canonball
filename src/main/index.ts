@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { registerIpc } from './ipc'
+import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler } from './closeFlush'
 
 let quitting = false
@@ -72,7 +72,7 @@ app.on('before-quit', () => {
   quitting = true
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.canonball.app')
 
@@ -84,6 +84,7 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  await applyStoredTheme()
 
   createWindow()
 

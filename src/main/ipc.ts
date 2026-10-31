@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, BrowserWindow } from 'electron'
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, writeDoc } from './projectFs'
@@ -25,6 +25,7 @@ function requireRoot(): string {
 async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
   const next = { ...(await loadSettings(settingsFile())), ...patch }
   await saveSettings(settingsFile(), next)
+  if ('theme' in patch) nativeTheme.themeSource = next.theme
   return next
 }
 
@@ -34,6 +35,11 @@ async function openProject(root: string): Promise<ProjectInfo> {
   currentRoot = root
   await updateSettings({ lastProjectRoot: root })
   return { root, name: basename(root), tree }
+}
+
+/** Apply the stored theme to native chrome before the window shows, to avoid a flash. */
+export async function applyStoredTheme(): Promise<void> {
+  nativeTheme.themeSource = (await loadSettings(settingsFile())).theme
 }
 
 export function registerIpc(): void {

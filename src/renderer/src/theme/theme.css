@@ -1,0 +1,30 @@
+/* Colour tokens. Hex values live only in this file. */
+:root {
+  color-scheme: light;
+  --bg: #fdfcfa;
+  --bg-sidebar: #f7f6f3;
+  --bg-chat: #fbfbfa;
+  --border: #e3e3e3;
+  --text: #1e1e1e;
+  --text-strong: #111111;
+  --text-muted: #888888;
+  --selection: #e6e1d6;
+  --accent-warn: #a06a00;
+  --accent-warn-bg: #fbf3e2;
+  --danger: #a63c2a;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1c1b19;
+  --bg-sidebar: #161513;
+  --bg-chat: #191816;
+  --border: #2e2c29;
+  --text: #ddd7cc;
+  --text-strong: #ece7dd;
+  --text-muted: #7a756c;
+  --selection: #2c2a26;
+  --accent-warn: #d9a74a;
+  --accent-warn-bg: #33291a;
+  --danger: #d98a73;
+}

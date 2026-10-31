@@ -8,14 +8,14 @@ interface Props {
   onOpen(relPath: string): void
 }
 
-const rowStyle = (depth: number, selected: boolean): React.CSSProperties => ({
+const rowStyle = (depth: number): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   gap: 6,
   width: '100%',
   padding: `3px 8px 3px ${8 + depth * 14}px`,
   border: 'none',
-  background: selected ? 'rgba(128, 128, 128, 0.22)' : 'transparent',
+  background: 'transparent',
   color: 'inherit',
   font: '13px -apple-system, system-ui, sans-serif',
   textAlign: 'left',
@@ -48,7 +48,7 @@ function Rows({
               <button
                 type="button"
                 className="cb-row"
-                style={rowStyle(depth, false)}
+                style={rowStyle(depth)}
                 onClick={() => toggle(n.relPath)}
               >
                 <span aria-hidden="true">{open ? '▾' : '▸'}</span>
@@ -75,8 +75,8 @@ function Rows({
           <div key={n.relPath} role="treeitem" aria-selected={isSel}>
             <button
               type="button"
-              className="cb-row"
-              style={rowStyle(depth, isSel)}
+              className={isSel ? 'cb-row cb-row-selected' : 'cb-row'}
+              style={rowStyle(depth)}
               onClick={() => onOpen(n.relPath)}
             >
               <span style={{ flex: 1 }}>{displayName(n.name)}</span>

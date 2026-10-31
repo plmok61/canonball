@@ -10,18 +10,31 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 
 .cb-toolbar button[aria-pressed='true'] {
-  background: rgba(128, 128, 128, 0.3);
+  background: var(--selection);
+  color: var(--text-strong);
+}
+
+.cb-toolbar button {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .cb-draft-banner {
   margin-left: auto;
   font-size: 12px;
-  opacity: 0.7;
+  padding: 1px 8px;
+  border-radius: 4px;
+  color: var(--accent-warn);
+  background: var(--accent-warn-bg);
 }
 
 .cb-page-scroll {
@@ -52,18 +65,18 @@
 .cb-page .ProseMirror hr::after {
   content: '* * *';
   letter-spacing: 0.5em;
-  opacity: 0.6;
+  color: var(--text-muted);
 }
 
 .cb-page .ProseMirror blockquote {
   margin: 0 0 1em;
   padding-left: 1em;
-  border-left: 3px solid rgba(128, 128, 128, 0.4);
+  border-left: 3px solid var(--border);
 }
 
 .cb-hint,
 .cb-raw {
-  opacity: 0.55;
+  color: var(--text-muted);
   user-select: none;
 }
 
@@ -82,8 +95,8 @@
   gap: 16px;
   padding: 4px 16px;
   font-size: 12px;
-  opacity: 0.7;
-  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
 }
 
 .cb-status span:first-child {
@@ -93,5 +106,9 @@
 .cb-load-error {
   margin: 40px 24px;
   text-align: center;
-  opacity: 0.7;
+  color: var(--text-muted);
+}
+
+.cb-status .cb-status-failed {
+  color: var(--danger);
 }

@@ -4,8 +4,11 @@ import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
 import { FileTree } from './tree/FileTree'
 import { sortTree } from './tree/sortTree'
+import { ThemePicker } from './theme/ThemePicker'
+import { useTheme } from './theme/useTheme'
 
 function App(): React.JSX.Element {
+  const { theme, setTheme } = useTheme()
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,6 +86,9 @@ function App(): React.JSX.Element {
     <div className="app">
       <aside data-testid="tree-panel">
         <FileTree tree={sorted} selected={selectedPath} onOpen={setSelectedPath} />
+        <footer className="cb-tree-footer">
+          <ThemePicker value={theme} onChange={setTheme} />
+        </footer>
       </aside>
       <main data-testid="editor-panel">
         {selectedPath ? (
