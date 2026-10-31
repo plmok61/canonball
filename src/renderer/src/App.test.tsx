@@ -22,7 +22,10 @@ const noAccess = {
 function stub(
   lastProjectRoot: string | null,
   newProjectDialog: Mock = vi.fn()
-): Record<'openProjectDialog' | 'newProjectDialog' | 'openProject' | 'setPathAccess', Mock> {
+): Record<
+  'openProjectDialog' | 'newProjectDialog' | 'openProject' | 'setPathAccess' | 'getProjectAccess',
+  Mock
+> {
   const info = { root: '/p', name: 'p', tree: [], access: noAccess }
   const api = {
     getSettings: vi.fn().mockResolvedValue({ lastProjectRoot, theme: 'system' }),
@@ -147,4 +150,82 @@ it('warns when project settings are unreadable', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     "Couldn't read .canonball/project.json. AI access is read-only until it's fixed."
   )
+})
+
+function deferred<T>(): { promise: Promise<T>; resolve(v: T): void } {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>((r) => (resolve = r))
+  return { promise, resolve }
+}
+
+const canonBadge = async (): Promise<HTMLElement> =>
+  (await screen.findByText('canon')).closest('.cb-row')!.querySelector('.cb-badge') as HTMLElement
+
+it('ignores a second badge click while a save is pending', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  const save = deferred<typeof noAccess>()
+  api.setPathAccess.mockReturnValue(save.promise)
+  render(<App />)
+  const b = await canonBadge()
+  fireEvent.click(b)
+  fireEvent.click(b)
+  expect(api.setPathAccess).toHaveBeenCalledTimes(1)
+  await act(async () => save.resolve(withCanon('read')))
+  await waitFor(() => expect(b).toHaveTextContent('👁'))
+})
+
+it("discards an old project's focus-refresh access after a switch", async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  const late = deferred<typeof noAccess>()
+  api.getProjectAccess.mockReturnValue(late.promise)
+  api.openProjectDialog.mockResolvedValue({
+    root: '/q',
+    name: 'q',
+    tree: canonTree,
+    access: withCanon('read')
+  })
+  render(<App />)
+  await canonBadge()
+  act(() => {
+    window.dispatchEvent(new Event('focus'))
+  })
+  act(() => menu!('open-project'))
+  await waitFor(() => expect(api.openProjectDialog).toHaveBeenCalled())
+  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('👁'))
+  await act(async () => late.resolve(withCanon('edit')))
+  expect(await canonBadge()).toHaveTextContent('👁')
+})
+
+it("shows the new project's access after a switch", async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  api.setPathAccess.mockResolvedValue(withCanon('read'))
+  api.openProjectDialog.mockResolvedValue({
+    root: '/q',
+    name: 'q',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  render(<App />)
+  fireEvent.click(await canonBadge())
+  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('👁'))
+  act(() => menu!('open-project'))
+  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('✎'))
 })
