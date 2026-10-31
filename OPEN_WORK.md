@@ -7,7 +7,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 ## Build phases
 
-- [ ] **Phase 4: AI connection & chat.** Providers, Keychain, model picker, chat (plan to write)
 - [ ] **Phase 5: AI file tools & proposals.** Tools, Accept/Reject cards, style rules (plan to write)
 - [ ] **Phase 6: Brainstorm sessions.** (plan to write)
 - [ ] **Phase 7: Package & release.** Mac build, README, license (plan to write)
@@ -37,6 +36,24 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
   - The renderer matches prose entries literally; main also matches their on-disk spelling. A hand-edited `"DRAFTS"` gets main's protection but no tree tag or Draft banner.
   - Saving `project.json` drops unknown top-level keys.
   - Prose-dialog polish left: focus drops when Done disables mid-save; Cancel stays enabled mid-save; nested folder and parent can both be ticked.
+- Phase 4 (AI connection & chat):
+  - Adapters live in `src/main/ai/`: `openaiCompat.ts` (OpenAI and the local server), `anthropic.ts`, `google.ts`, picked by `providers.ts` `adapterFor`. They share `http.ts` (`send`), `sse.ts` (`parseSse`) and `errors.ts` (`ProviderError` copy). They use plain `fetch` from main with no SDKs. Phase 5 adds tool calling per adapter.
+  - `aiConfig.resolve(provider)` (`src/main/ai/aiConfig.ts`) is the only place a key is read for a request. Keys are encrypted with `safeStorage` in `<userData>/secrets.json` (`secrets.ts`), and the renderer only sees booleans.
+  - `CHAT_INSTRUCTIONS` (`src/main/ai/instructions.ts`) is the whole system prompt today. Phase 5 adds `style_rules.md`, `names_to_avoid.md`, `memory/` and the tool instructions there.
+  - Chats are saved in `.canonball/chats/<uuid>.json` (`src/main/chats.ts`) with a `*` `.gitignore`. Unreadable chat files are skipped and never overwritten.
+  - Known gaps:
+    - Switching projects or closing the window mid-reply stops the stream and loses the partial reply. The writer's message is already saved.
+    - There is no request timeout; **Stop** is the only way out of a hung stream.
+    - Only one local server URL is supported.
+    - A renderer reload doesn't cancel a running stream.
+  - Polish left:
+    - A Google blocked prompt shows the generic "No reply came back" copy.
+    - Connection-check results in Settings can arrive out of order.
+    - Settings can stack over the prose dialog.
+    - The chat log's live region is noisy for screen readers while streaming, and messages have no speaker labels.
+    - `ChatPanel.tsx` is ~430 lines; split it before Phase 5 grows it.
+    - A corrupt `secrets.json` is read as empty, so the next save drops the other keys.
+    - There are no IPC handler tests for the new channels.
 
 ## Decide later (after using the app)
 
