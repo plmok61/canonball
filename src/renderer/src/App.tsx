@@ -30,6 +30,7 @@ function App(): React.JSX.Element {
   )
   const [proseOpen, setProseOpen] = useState(false)
   const [proseBusy, setProseBusy] = useState(false)
+  const [proseError, setProseError] = useState<string | null>(null)
   const switching = useRef(false)
   const saving = useRef(false)
 
@@ -56,6 +57,7 @@ function App(): React.JSX.Element {
           setRefreshed(null)
           setAccessState(null)
           setProseOpen(false)
+          setProseError(null)
           setProject(info)
         }
       } catch (e) {
@@ -129,6 +131,7 @@ function App(): React.JSX.Element {
   const cycle = (relPath: string): void => {
     if (!project || !access || saving.current) return
     saving.current = true
+    setError(null)
     const at = project.root
     window.canonball
       .setPathAccess(at, relPath, nextAccess(access.settings, relPath))
@@ -137,6 +140,16 @@ function App(): React.JSX.Element {
       .finally(() => {
         saving.current = false
       })
+  }
+
+  const openProse = (): void => {
+    setProseError(null)
+    setProseOpen(true)
+  }
+
+  const closeProse = (): void => {
+    setProseError(null)
+    setProseOpen(false)
   }
 
   const saveProse = (prose: string[]): void => {
@@ -150,6 +163,8 @@ function App(): React.JSX.Element {
       return
     }
     saving.current = true
+    setError(null)
+    setProseError(null)
     setProseBusy(true)
     const at = project.root
     window.canonball
@@ -158,7 +173,7 @@ function App(): React.JSX.Element {
         setAccessState({ root: at, access: next })
         setProseOpen(false)
       })
-      .catch((e) => setError(message(e)))
+      .catch((e) => setProseError(message(e)))
       .finally(() => {
         saving.current = false
         setProseBusy(false)
@@ -197,8 +212,9 @@ function App(): React.JSX.Element {
             : access.settings.prose
         }
         onDone={saveProse}
-        onCancel={prompting ? undefined : () => setProseOpen(false)}
+        onCancel={prompting ? undefined : closeProse}
         busy={proseBusy}
+        error={proseError}
       />
     ) : null
 
@@ -224,7 +240,7 @@ function App(): React.JSX.Element {
         />
         <footer className="cb-tree-footer">
           {!access?.unreadable && (
-            <button type="button" onClick={() => setProseOpen(true)}>
+            <button type="button" onClick={openProse}>
               Prose folders…
             </button>
           )}

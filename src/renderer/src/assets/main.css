@@ -167,6 +167,12 @@ body {
   font-size: 13px;
 }
 
+.cb-dialog .cb-dialog-error {
+  margin: 12px 0 0;
+  color: var(--accent-warn);
+  font-size: 12px;
+}
+
 .cb-dialog-list {
   flex: 1;
   overflow-y: auto;

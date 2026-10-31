@@ -11,6 +11,8 @@ interface Props {
   onCancel?(): void
   /** Disables Done while a save is in flight. */
   busy?: boolean
+  /** Why the last save failed, shown inside the dialog. */
+  error?: string | null
 }
 
 interface Row {
@@ -28,7 +30,14 @@ function folderRows(nodes: TreeNode[], depth: number, out: Row[]): Row[] {
   return out
 }
 
-export function ProseDialog({ tree, initial, onDone, onCancel, busy }: Props): React.JSX.Element {
+export function ProseDialog({
+  tree,
+  initial,
+  onDone,
+  onCancel,
+  busy,
+  error
+}: Props): React.JSX.Element {
   const sorted = sortTree(tree)
   const folders = folderRows(sorted, 0, [])
   const files: Row[] = sorted
@@ -108,6 +117,11 @@ export function ProseDialog({ tree, initial, onDone, onCancel, busy }: Props): R
             </>
           )}
         </div>
+        {error && (
+          <p role="alert" className="cb-dialog-error">
+            {error}
+          </p>
+        )}
         <div className="cb-dialog-actions">
           {onCancel && (
             <button type="button" onClick={onCancel}>

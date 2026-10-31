@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import App from './App'
 import { flushAll } from './editor/saveRegistry'
@@ -280,7 +280,7 @@ it('Prose folders… reopens the dialog', async () => {
   expect(api.setProsePaths).not.toHaveBeenCalled()
 })
 
-it('keeps the dialog open and shows the error when saving prose folders fails', async () => {
+it('keeps the dialog open and shows the error inside it when saving prose folders fails', async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
     root: '/p',
@@ -288,12 +288,39 @@ it('keeps the dialog open and shows the error when saving prose folders fails', 
     tree: draftsTree,
     access: { ...noAccess, needsProsePrompt: true }
   })
-  api.setProsePaths.mockRejectedValue(new Error('disk full'))
+  api.setProsePaths.mockRejectedValueOnce(new Error('disk full'))
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
-  expect(await screen.findByText('disk full')).toBeInTheDocument()
-  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  const dialog = screen.getByRole('dialog')
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('disk full')
+  expect(screen.getAllByText('disk full')).toHaveLength(1)
   await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled())
+  const retry = deferred<typeof noAccess>()
+  api.setProsePaths.mockReturnValueOnce(retry.promise)
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  expect(within(dialog).queryByRole('alert')).toBeNull()
+  await act(async () => retry.resolve(noAccess))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('a successful badge cycle clears the previous error', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  api.setPathAccess.mockRejectedValueOnce(new Error('disk full'))
+  api.setPathAccess.mockResolvedValueOnce(withCanon('read'))
+  render(<App />)
+  const b = await canonBadge()
+  fireEvent.click(b)
+  expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
+  fireEvent.click(b)
+  await waitFor(() => expect(b).toHaveTextContent('👁'))
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it('hides Prose folders… when settings are unreadable', async () => {

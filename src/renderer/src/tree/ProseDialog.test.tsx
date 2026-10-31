@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { TreeNode } from '../../../shared/types'
 import { ProseDialog } from './ProseDialog'
@@ -61,4 +61,11 @@ it("keeps prose entries the dialog doesn't list", () => {
   render(<ProseDialog tree={tree} initial={['drafts', 'drafts/ch1.md', 'gone']} onDone={onDone} />)
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(onDone).toHaveBeenCalledWith(['drafts', 'drafts/ch1.md', 'gone'])
+})
+
+it('shows an error inside the dialog', () => {
+  const { rerender } = render(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} />)
+  expect(screen.queryByRole('alert')).toBeNull()
+  rerender(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} error="disk full" />)
+  expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('disk full')
 })

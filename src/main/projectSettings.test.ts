@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, EMPTY_SETTINGS } from '../shared/access'
 import {
   SETTINGS_REL,
@@ -92,12 +92,21 @@ describe('project settings', () => {
   })
 
   it('a failed mutation does not block the next one', async () => {
-    await fs.mkdir(path.dirname(file()))
-    await fs.writeFile(file(), '{oops')
-    const first = setPathAccess(root, 'canon', 'read')
-    const second = setProsePaths(root, ['drafts'])
-    await expect(first).rejects.toThrow('Project settings file is unreadable')
-    await expect(second).rejects.toThrow('Project settings file is unreadable')
+    await saveProjectSettings(root, DEFAULT_PROJECT_SETTINGS)
+    // Only the first queued mutation sees a failed read; the second reads the real file.
+    const err = Object.assign(new Error('EACCES'), { code: 'EACCES' })
+    const read = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(err)
+    try {
+      const first = setPathAccess(root, 'canon', 'read')
+      const second = setProsePaths(root, ['drafts', 'notes'])
+      await expect(first).rejects.toThrow('Project settings file is unreadable')
+      const next = await second
+      expect(next.settings.prose).toEqual(['drafts', 'notes'])
+      expect(next.settings.access.canon).toBe('edit')
+      expect(next.unreadable).toBe(false)
+    } finally {
+      read.mockRestore()
+    }
   })
 
   it('rejects escaping and empty paths', async () => {

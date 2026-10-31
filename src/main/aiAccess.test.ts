@@ -4,7 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AccessDenied, createAiAccess } from './aiAccess'
 import { createProject } from './projectFs'
-import { SETTINGS_REL, setPathAccess } from './projectSettings'
+import { SETTINGS_REL, setPathAccess, setProsePaths } from './projectSettings'
 
 const TEMPLATE = path.resolve(__dirname, '../../template')
 const CHAPTER = 'drafts/chapters/c.md'
@@ -52,6 +52,47 @@ describe('AI access layer', () => {
       await denied(ai.write(p, 'AI text'), /Prose is never edited/)
     }
     expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
+  })
+
+  it('refuses prose writes through a differently normalized folder name', async () => {
+    const nfc = 'Entw\u00fcrfe'
+    const nfd = nfc.normalize('NFD')
+    await fs.mkdir(path.join(root, nfc))
+    await fs.writeFile(path.join(root, nfc, 'c.md'), CHAPTER_TEXT)
+    await setProsePaths(root, ['drafts', nfc])
+    const s = JSON.parse(await disk(SETTINGS_REL))
+    s.access[`${nfc}/c.md`] = 'edit'
+    await writeSettings(JSON.stringify(s))
+    const ai = createAiAccess(root)
+    await denied(ai.write(`${nfc}/c.md`, 'AI text'), /Prose is never edited/)
+    // A normalization-insensitive disk (the macOS default) finds the folder
+    // under either spelling; elsewhere the NFD spelling simply doesn't exist.
+    await denied(
+      ai.write(`${nfd}/c.md`, 'AI text'),
+      existsSync(path.join(root, nfd)) ? /Prose is never edited/ : /Not available to the AI/
+    )
+    expect(await disk(`${nfc}/c.md`)).toBe(CHAPTER_TEXT)
+  })
+
+  it('refuses prose writes with a trailing slash', async () => {
+    const ai = createAiAccess(root)
+    await denied(ai.write(`${CHAPTER}/`, 'AI text'), /Prose is never edited/)
+    expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
+  })
+
+  it('refuses prose writes through a file-level symlink', async () => {
+    await fs.symlink('../drafts/chapters/c.md', path.join(root, 'canon/c.md'))
+    const ai = createAiAccess(root)
+    await denied(ai.write('canon/c.md', 'AI text'), /Prose is never edited/)
+    expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
+  })
+
+  it('refuses creating prose through a dangling symlink', async () => {
+    await fs.symlink('../drafts/chapters/new.md', path.join(root, 'canon/new.md'))
+    const ai = createAiAccess(root)
+    // The link itself occupies the name, so the exclusive create refuses it.
+    await denied(ai.create('canon/new.md', 'AI text'), /File already exists/)
+    expect(existsSync(path.join(root, 'drafts/chapters/new.md'))).toBe(false)
   })
 
   it('canonicalize returns the real on-disk path', async () => {
