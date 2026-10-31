@@ -33,6 +33,7 @@
     "@tiptap/pm": "^3.32.2",
     "@tiptap/react": "^3.32.2",
     "@tiptap/starter-kit": "^3.32.2",
+    "harper.js": "2.13.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
