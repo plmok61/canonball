@@ -1,4 +1,5 @@
 import type { Editor, JSONContent } from '@tiptap/core'
+import { EditorState, Selection } from '@tiptap/pm/state'
 import { parse as parseYaml } from 'yaml'
 
 export interface OpenDoc {
@@ -78,10 +79,24 @@ function requireMarkdown(editor: Editor): NonNullable<Editor['markdown']> {
   return editor.markdown
 }
 
+/**
+ * Replace the editor's document with a file's contents. Loading is not an edit:
+ * it is kept out of undo history, and any earlier history (a previous load, or
+ * edits made before a reload from disk) is dropped, so undo can never step back
+ * across a load and write empty or stale text over the file.
+ */
 export function loadIntoEditor(editor: Editor, md: string): OpenDoc {
   const { frontMatter, body } = splitFrontMatter(md)
   const json = liftLeadingAtoms(requireMarkdown(editor).parse(body))
-  editor.commands.setContent(json.content?.length ? json : '', { emitUpdate: false })
+  editor
+    .chain()
+    .setMeta('addToHistory', false)
+    .setContent(json.content?.length ? json : '', { emitUpdate: false })
+    .run()
+  const { doc, plugins } = editor.state
+  editor.view.updateState(
+    EditorState.create({ doc, plugins, selection: Selection.atStart(doc) })
+  )
   return { frontMatter }
 }
 

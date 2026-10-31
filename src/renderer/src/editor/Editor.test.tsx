@@ -303,3 +303,46 @@ it('reopening a file with a pending orphan save never loses either version (orph
   await new Promise((r) => setTimeout(r, 50))
   expect(api.writeDoc.mock.calls.length).toBe(writesAfter)
 })
+
+it('undo immediately after open neither changes the doc nor writes', async () => {
+  const api = stub('# Chapter\n\nShe left.\n')
+  render(<Editor relPath="drafts/ch1.md" />)
+  const editor = await ready()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  act(() => {
+    editor.commands.undo()
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(document.querySelector('.ProseMirror')).toHaveTextContent('She left.')
+  expect(api.writeDoc).not.toHaveBeenCalled()
+})
+
+it('undo after focus reload does not restore pre-reload text', async () => {
+  const api = stub('old text\n', 1)
+  render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  // an edit that is saved, so the editor is clean before the reload
+  act(() => {
+    editor.commands.insertContent('mine ')
+  })
+  const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
+  await handler()
+  expect(api.writeDoc).toHaveBeenCalledTimes(1)
+  api.readDoc.mockResolvedValue({ content: 'external text\n', mtimeMs: 5 })
+  fireEvent.focus(window)
+  await waitFor(() =>
+    expect(document.querySelector('.ProseMirror')).toHaveTextContent('external text')
+  )
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  act(() => {
+    editor.commands.undo()
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(document.querySelector('.ProseMirror')).toHaveTextContent('external text')
+  expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('mine')
+  expect(api.writeDoc).toHaveBeenCalledTimes(1)
+})
