@@ -3,6 +3,7 @@ import { join } from 'path'
 import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
 import { buildMenuTemplate } from './menu'
+import { isSafeExternalUrl } from './navigation'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -68,8 +69,12 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // The window only ever shows the app. Navigating away (a file dropped from
+  // Finder, a clicked link) would tear the renderer down without the flush
+  // handshake, so refuse every navigation; safe links open in the system.
+  mainWindow.webContents.on('will-navigate', (e) => e.preventDefault())
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
