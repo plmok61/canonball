@@ -44,7 +44,12 @@ export async function listTree(root: string, rel = ''): Promise<TreeNode[]> {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
     const relPath = rel ? `${rel}/${entry.name}` : entry.name
     if (entry.isDirectory()) {
-      nodes.push({ name: entry.name, relPath, kind: 'folder', children: await listTree(root, relPath) })
+      nodes.push({
+        name: entry.name,
+        relPath,
+        kind: 'folder',
+        children: await listTree(root, relPath)
+      })
     } else if (entry.isFile() && entry.name.endsWith('.md')) {
       nodes.push({ name: entry.name, relPath, kind: 'file' })
     }

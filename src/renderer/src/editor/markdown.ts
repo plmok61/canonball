@@ -94,9 +94,7 @@ export function loadIntoEditor(editor: Editor, md: string): OpenDoc {
     .setContent(json.content?.length ? json : '', { emitUpdate: false })
     .run()
   const { doc, plugins } = editor.state
-  editor.view.updateState(
-    EditorState.create({ doc, plugins, selection: Selection.atStart(doc) })
-  )
+  editor.view.updateState(EditorState.create({ doc, plugins, selection: Selection.atStart(doc) }))
   return { frontMatter }
 }
 

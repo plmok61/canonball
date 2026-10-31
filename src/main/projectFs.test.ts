@@ -52,7 +52,8 @@ describe('listTree', () => {
     await fs.mkdir(path.join(tmp, 'node_modules'))
     await fs.writeFile(path.join(tmp, 'README.md'), 'r')
     const tree = await listTree(tmp)
-    const byName = (n: TreeNode[], name: string) => n.find((x) => x.name === name)
+    const byName = (n: TreeNode[], name: string): TreeNode | undefined =>
+      n.find((x) => x.name === name)
     expect(tree.map((n) => n.name).sort()).toEqual(['README.md', 'canon'])
     const canon = byName(tree, 'canon')!
     expect(canon.kind).toBe('folder')
@@ -84,7 +85,9 @@ describe('createProject', () => {
     await fs.access(path.join(target, 'canon', 'characters.md'))
     await fs.access(path.join(target, 'memory', 'style_rules.md'))
     await expect(fs.access(path.join(target, 'CLAUDE.md'))).rejects.toThrow()
-    expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toContain('.canonball/chats/')
+    expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toContain(
+      '.canonball/chats/'
+    )
   })
 
   it('refuses a non-empty folder', async () => {

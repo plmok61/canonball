@@ -20,7 +20,7 @@ function setup(quitting: boolean, quitAnyway = false) {
         timeoutCb = null
       }
     }),
-    confirmQuitAnyway: vi.fn(async (_detail: string) => quitAnyway),
+    confirmQuitAnyway: vi.fn<(detail: string) => Promise<boolean>>(async () => quitAnyway),
     closeWindow: vi.fn(),
     quitApp: vi.fn(),
     isQuitting: () => isQuitting,
