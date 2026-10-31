@@ -10,7 +10,8 @@ import { sortTree } from './tree/sortTree'
 import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
 
-const UNREADABLE = "Couldn't read .canonball/project.json. AI access is read-only until it's fixed."
+const UNREADABLE =
+  "Couldn't read .canonball/project.json. The AI can't see or change any files until it's fixed."
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)

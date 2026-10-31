@@ -139,9 +139,15 @@ describe('AI access layer', () => {
     await denied(ai.write('canon/characters.md', 'x'), /Project settings file is unreadable/)
     await denied(ai.create('notes/idea.md', 'x'), /Project settings file is unreadable/)
     expect(await disk('canon/characters.md')).toBe(before)
-    const list = await ai.list()
-    expect(list.find((f) => f.relPath === 'canon/characters.md')?.access).toBe('read')
-    expect(list.every((f) => f.access === 'read')).toBe(true)
+    expect(existsSync(path.join(root, 'notes/idea.md'))).toBe(false)
+  })
+
+  it('an unreadable settings file hides everything', async () => {
+    await writeSettings('{oops')
+    const ai = createAiAccess(root)
+    expect(await ai.list()).toEqual([])
+    await denied(ai.read('canon/characters.md'), /Project settings file is unreadable/)
+    await denied(ai.read(CHAPTER), /Project settings file is unreadable/)
   })
 
   it('list reports access per file', async () => {

@@ -153,7 +153,7 @@ it('warns when project settings are unreadable', async () => {
   })
   render(<App />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    "Couldn't read .canonball/project.json. AI access is read-only until it's fixed."
+    "Couldn't read .canonball/project.json. The AI can't see or change any files until it's fixed."
   )
 })
 

@@ -21,7 +21,7 @@
 - Ruling: AI may create a file only when the folder it goes in has effective ✎ and is not prose. The project's top level has no entry of its own, so it is 👁 and the AI can't create files there.
 - Ruling: new projects get `.canonball/project.json` from `createProject` with the spec's default table and `prose: ["drafts"]`. Projects without the file get all-👁 in memory and the prose dialog. Nothing is written until the writer presses **Done**. Done with nothing ticked still writes the file (`prose: []`), so the app asks only once.
 - Ruling: the dialog cannot be dismissed without Done. It pre-ticks `drafts` if that folder exists. It lists every folder (indented) and each top-level `.md` file. The tree footer has a **Prose folders…** button that reopens it, which is how the writer marks prose "from the tree".
-- Ruling: an unreadable or invalid `project.json` (bad JSON, wrong shape) is never overwritten. The project opens with all-👁 rules, the AI can't write anything, badge and prose changes are refused with `Project settings file is unreadable`, and the tree shows `Couldn't read .canonball/project.json. AI access is read-only until it's fixed.`
+- Ruling: an unreadable or invalid `project.json` (bad JSON, wrong shape) is never overwritten. The AI sees nothing: `list()` returns no files and every read, write and create is refused with `Project settings file is unreadable`, badge and prose changes are refused with the same message, and the tree shows `Couldn't read .canonball/project.json. The AI can't see or change any files until it's fixed.`
 - Ruling: main re-reads `project.json` from disk on every access-layer call and every renderer settings call (it's a small file), so external edits are never stale. The renderer re-fetches it with the tree on window focus.
 - Ruling: the Draft banner now shows for any prose path, with the same copy, `Draft — AI won't edit`.
 - Ruling: inherited badges are drawn in `--text-muted`, explicit ones in `--text`. Prose rows show a muted `prose` tag after the name.
@@ -42,7 +42,7 @@
 1. **Path tricks against prose.** `drafts/../drafts/c.md`, `DRAFTS/c.md`, `./drafts/c.md`, and a symlink `canon/link → ../drafts` must all be refused for AI writes (Task 3: `refuses prose writes however the path is spelled`).
 2. **A file override inside a prose folder.** A hand-edited `project.json` saying `"drafts/ch1.md": "edit"` must still be refused (Task 1: `prose clamps edit to read even with an explicit override`; Task 3 covers the write).
 3. **Opening an existing v1 project writes nothing** until Done (Task 2: `opening a project without settings writes nothing`).
-4. **A corrupt `project.json`** is never overwritten and grants no writes (Task 2: `an unreadable file is reported and never overwritten`; Task 3: `an unreadable settings file grants no writes`).
+4. **A corrupt `project.json`** is never overwritten and grants the AI nothing, reads included (Task 2: `an unreadable file is reported and never overwritten`; Task 3: `an unreadable settings file grants no writes`, `an unreadable settings file hides everything`).
 5. **Cycling back to the inherited value** removes the override, so later folder changes still apply to the file (Task 1: `cycling to the inherited value removes the override`).
 
 ---
@@ -157,7 +157,7 @@
   }
   export function createAiAccess(root: string): AiAccess
   ```
-- Denial messages (Phase 5 shows them to the model): `Prose is never edited by the AI: <relPath>`, `The writer has hidden this file from the AI: <relPath>`, `The AI may only read this file: <relPath>`, `The AI may not create files in this folder: <folder or "the project's top level">`, `Not available to the AI: <relPath>` (dot-paths, non-`.md`, escapes, missing file on read/write), `File already exists: <relPath>` on create. Unreadable settings → every write/create is denied with `Project settings file is unreadable`.
+- Denial messages (Phase 5 shows them to the model): `Prose is never edited by the AI: <relPath>`, `The writer has hidden this file from the AI: <relPath>`, `The AI may only read this file: <relPath>`, `The AI may not create files in this folder: <folder or "the project's top level">`, `Not available to the AI: <relPath>` (dot-paths, non-`.md`, escapes, missing file on read/write), `File already exists: <relPath>` on create. Unreadable settings → `list()` returns nothing and every read/write/create is denied with `Project settings file is unreadable`.
 - Canonicalize: `resolveInside`, then `fs.realpathSync.native` on the deepest existing ancestor (this fixes letter case and follows symlinks on macOS), re-append the missing tail, and take the path relative to `fs.realpathSync.native(root)`. The prose and access checks run on that result. Checks are done after canonicalizing **and** settings are re-loaded on each call.
 - `write` and `create` check the canonical path, then call `writeDoc(root, canonical, content)`. `create` makes no folders: the parent must exist.
 
@@ -169,7 +169,7 @@
   - `read-only and hidden are enforced`: `write('outline/outline.md', …)` rejects `may only read`; set `memory` hidden via `setPathAccess` → `read('memory/style_rules.md')` rejects `hidden` and `list()` has no `memory/` entries
   - `file-level edit in a read folder allows editing that file only`: `setPathAccess(root, 'outline/outline.md', 'edit')` → `write` works; `create('outline/new.md', …)` rejects `may not create`
   - `dot-paths and non-markdown are never available`: `read('.canonball/project.json')`, `write('.gitignore', …)`, `create('canon/x.txt', …)` all reject `Not available to the AI`
-  - `an unreadable settings file grants no writes`: write `{oops` to `project.json` → `write('canon/characters.md', …)` rejects `Project settings file is unreadable`, and `list()` still returns read entries
+  - `an unreadable settings file grants no writes`: write `{oops` to `project.json` → `write('canon/characters.md', …)` rejects `Project settings file is unreadable`, and nothing is created; `an unreadable settings file hides everything`: `list()` returns `[]` and `read` rejects `Project settings file is unreadable`
   - `list reports access per file`: on defaults, `canon/characters.md` has `edit`, `drafts/chapters/c.md` has `read`, nothing under `.canonball`
 - [ ] **Step 2: Run** `npm test -- aiAccess` → FAIL.
 - [ ] **Step 3: Implement** `aiAccess.ts`. It is not wired to IPC (Phase 5 does that); it must not be reachable from the renderer.

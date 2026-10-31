@@ -118,10 +118,16 @@ export function createAiAccess(root: string): AiAccess {
     return canonical
   }
 
-  async function writable(relPath: string): Promise<{ canonical: string; s: ProjectSettings }> {
-    const canonical = target(relPath)
+  /** Settings for this call; a corrupt file grants nothing, so hidden files stay hidden. */
+  async function readableSettings(): Promise<ProjectSettings> {
     const { s, unreadable } = await settings()
     if (unreadable) throw new AccessDenied('Project settings file is unreadable')
+    return s
+  }
+
+  async function writable(relPath: string): Promise<{ canonical: string; s: ProjectSettings }> {
+    const canonical = target(relPath)
+    const s = await readableSettings()
     if (isProse(s, canonical)) {
       throw new AccessDenied(`Prose is never edited by the AI: ${relPath}`)
     }
@@ -132,7 +138,8 @@ export function createAiAccess(root: string): AiAccess {
     canonicalize,
 
     async list() {
-      const { s } = await settings()
+      const { s, unreadable } = await settings()
+      if (unreadable) return []
       const out: AiFile[] = []
       for (const relPath of flattenFiles(await listTree(root))) {
         const a = effectiveAccess(s, relPath)
@@ -143,7 +150,7 @@ export function createAiAccess(root: string): AiAccess {
 
     async read(relPath) {
       const canonical = target(relPath)
-      const { s } = await settings()
+      const s = await readableSettings()
       if (effectiveAccess(s, canonical) === 'hidden') {
         throw new AccessDenied(`The writer has hidden this file from the AI: ${relPath}`)
       }
