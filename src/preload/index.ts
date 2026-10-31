@@ -1,22 +1,28 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
+import type { CanonballApi } from '../shared/types'
 
-// Custom APIs for renderer
-const api = {}
+let flushHandler: (() => Promise<void>) | null = null
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
+ipcRenderer.on('canonball:flush-request', async () => {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+    if (flushHandler) await flushHandler()
+  } finally {
+    ipcRenderer.send('canonball:flush-done')
   }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+})
+
+const api: CanonballApi = {
+  openProjectDialog: () => ipcRenderer.invoke('canonball:openProjectDialog'),
+  newProjectDialog: () => ipcRenderer.invoke('canonball:newProjectDialog'),
+  openProject: (root) => ipcRenderer.invoke('canonball:openProject', root),
+  refreshTree: () => ipcRenderer.invoke('canonball:refreshTree'),
+  readDoc: (relPath) => ipcRenderer.invoke('canonball:readDoc', relPath),
+  writeDoc: (relPath, content) => ipcRenderer.invoke('canonball:writeDoc', relPath, content),
+  getSettings: () => ipcRenderer.invoke('canonball:getSettings'),
+  setSettings: (patch) => ipcRenderer.invoke('canonball:setSettings', patch),
+  onFlushRequest: (handler) => {
+    flushHandler = handler
+  }
 }
+
+contextBridge.exposeInMainWorld('canonball', api)

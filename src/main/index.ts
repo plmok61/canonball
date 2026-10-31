@@ -1,4 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { registerIpc } from './ipc'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -13,8 +14,32 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
     }
+  })
+
+  // Close-flush handshake: let the renderer save pending edits before closing.
+  let closing = false
+  mainWindow.on('close', (event) => {
+    if (closing) return
+    event.preventDefault()
+    closing = true
+    let done = false
+    const finish = (): void => {
+      if (done) return
+      done = true
+      ipcMain.removeListener('canonball:flush-done', onDone)
+      clearTimeout(timer)
+      if (!mainWindow.isDestroyed()) mainWindow.close()
+    }
+    const onDone = (e: Electron.IpcMainEvent): void => {
+      if (e.sender === mainWindow.webContents) finish()
+    }
+    const timer = setTimeout(finish, 3000)
+    ipcMain.on('canonball:flush-done', onDone)
+    mainWindow.webContents.send('canonball:flush-request')
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -40,7 +65,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.canonball.app')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -49,8 +74,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  registerIpc()
 
   createWindow()
 

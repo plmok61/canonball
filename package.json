@@ -2,10 +2,9 @@
   "name": "canonball",
   "productName": "Canonball",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "A desktop writing app where the writer writes the prose and the AI keeps the notes.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Phil Mok",
   "scripts": {
     "test": "vitest run",
     "format": "prettier --write .",
