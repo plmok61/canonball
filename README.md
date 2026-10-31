@@ -1,71 +1,78 @@
 # Canonball
 
-A scaffold for writing short stories with AI. Copy this repo, fill in your canon, and start writing.
+A desktop writing app for fiction. You write the prose. The AI keeps your notes, answers questions about your story, and helps you brainstorm, but it never writes or edits your drafts.
+
+Think of it as "Cursor for writers," with one inversion: in Cursor the AI writes the code. In Canonball the AI stays out of the prose.
+
+> **Status: early development.** Phase 1 (the editor) is done. The AI features are next. See the [roadmap](docs/superpowers/plans/2026-10-31-roadmap.md).
 
 ---
 
-## How to Use This
+## What works today
 
-### 1. Copy the scaffold
+- **Projects.** Open any folder of markdown files, or create a new project from the built-in template (File ▸ Open Project… ⌘O, New Project… ⇧⌘N).
+- **Folder tree.** Your project's folders and files sit in the left column. Chapters sort naturally (chapter 10 comes after chapter 2).
+- **A real word processor.** A page-style editor with bold, italics, headings, quotes, lists and scene breaks. You never see markdown syntax, but every file is saved as plain markdown, so your work stays portable and works with git.
+- **Your files stay intact.** Opening a file never rewrites it. Template prompts (HTML comments) show as faint hints, and front matter, raw HTML and footnotes are preserved exactly.
+- **Autosave.** Saves shortly after you stop typing. If a save fails, the status bar shows "not saved — retrying" and the app keeps trying. If anything is still unsaved when you quit, it asks before closing.
+- **Light, Dark and Match System themes.** Dark mode is warm off-white on soft near-black, with contrast checked against WCAG AA.
 
-Duplicate this directory and give it your project's name. Everything here is a starting point — delete what you don't need.
+## What's coming
 
-### 2. Write a first-session prompt
+| Phase | What it adds |
+|---|---|
+| 2. Writing aids | Spellcheck and offline grammar checking ([Harper](https://writewithharper.com)). It flags problems and leaves the fixes to you. |
+| 3. AI permissions | A badge on every folder and file: the AI can read and edit ✎, read only 👁, or can't see it ⊘. Prose folders can never be edited by the AI. |
+| 4. AI connection & chat | A chat panel. Bring your own API key (Anthropic, OpenAI, Google) or point it at a local model (Ollama, LM Studio). Keys are stored in the macOS Keychain. |
+| 5. AI notes & canon edits | The AI can propose changes to notes and canon, and every change is an Accept/Reject card. Nothing is changed silently. |
+| 6. Brainstorm sessions | Goal-driven brainstorm threads that end with a session log and suggested canon updates. |
+| 7. Release | A signed Mac build. |
 
-Before opening your AI tool, write a short prompt that tells it your story idea, what you already know, and what you want help figuring out. See `examples/prompts/first-session.md` for a model to learn from.
-
-A good first prompt covers: the core idea, the central theme, any decisions you've already made, and the open questions you want help working through. Then paste your prompt into your AI tool of choice (Claude Code, Cursor, ChatGPT, Codex) and start the conversation.
-
-Don't skip this step. Writing before canon exists leads to drift.
-
-### 3. Build canon before prose
-
-The `canon/` folder is the single source of truth for your story. Fill in all four files before writing your first draft:
-
-| File | What goes here |
-|------|---------------|
-| `canon/characters.md` | Who your characters are, how they think, what they want |
-| `canon/world.md` | Setting, rules, physical and social reality of the story |
-| `canon/themes.md` | What the story is about — and what it must never do |
-| `canon/timeline.md` | The sequence of events, including unresolved open questions |
-
-See `examples/canon/` for a filled-in example based on a short story about a robot on a trash planet.
-
-### 4. Use notes freely
-
-`notes/` is for raw brainstorming. It can contradict canon. It doesn't need to be consistent. When an idea solidifies, promote it into the relevant canon file.
-
-### 5. Write drafts in chapters
-
-`drafts/chapters/` organizes prose by chapter number. Name versions clearly within each folder — `draft1.md`, `draft2.md`, `draft2-author.md` for anything you write yourself.
-
-### 6. Write a session prompt to resume work
-
-Most AI tools have no memory of your last conversation. Each time you start a new session, write a short prompt that restores context — what the story is, where you left off, and what you want to do today. See `examples/prompts/brainstorm-ship-arrival.md` for an example of what a mid-story session prompt looks like.
-
-At the end of each session, create a log in `sessions/` using the template. Record what was decided, what was written, and where to pick up next time — this becomes the source material for your next session prompt.
+Export to Word, EPUB and PDF is planned. The details will be decided after the app has been used for real writing.
 
 ---
 
-## Project Layout
+## A Canonball project
+
+New projects are created from [`template/`](template/), and existing folders open as they are.
+
+| Folder | What goes here |
+|---|---|
+| `canon/` | The source of truth: characters, world, themes (including what the story must never do), timeline |
+| `notes/` | Free brainstorming; may contradict canon until ideas are promoted |
+| `outline/` | Chapter-by-chapter structure |
+| `drafts/` | Your prose, by chapter, plus full-manuscript versions. **The AI never edits these.** |
+| `sessions/` | Brainstorm session logs, so each session picks up where the last one left off |
+| `memory/` | Your profile, tone notes, style rules and names to avoid, which shape how the AI talks to you |
+
+[`examples/`](examples/) has a filled-in sample project (a robot on a trash planet) and example brainstorm prompts.
+
+---
+
+## Running it
+
+Requires macOS and Node.js 22+.
+
+```bash
+npm install
+npm run dev        # run the app with live reload
+npm test           # run the test suite
+npm run build:mac  # build Canonball.app and a .dmg into dist/
+```
+
+The Mac build isn't signed yet. The first time you open it, right-click the app and choose **Open**.
+
+## Repository layout
 
 | Path | Purpose |
-|------|---------|
-| `canon/` | Authoritative story facts — characters, world, themes, timeline |
-| `notes/` | Exploratory brainstorming (may contradict canon) |
-| `outline/` | Chapter-by-chapter narrative structure |
-| `drafts/` | Prose drafts organized by chapter and full manuscript versions |
-| `sessions/` | Per-session logs for continuity across AI conversations |
-| `memory/` | AI session memory — author profile and tone notes |
-| `examples/` | Example canon files and starter prompts |
+|---|---|
+| `src/main/` | Electron main process: files, project settings, window, menus |
+| `src/preload/` | The safe bridge between the window and the filesystem |
+| `src/renderer/` | The React UI: file tree, editor, themes |
+| `src/shared/` | Types and helpers used by both sides |
+| `template/` | The new-project scaffold |
+| `docs/superpowers/` | Design spec, roadmap and phase plans |
+| `docs/reference/` | AI-isms research behind the style rules |
+| `OPEN_WORK.md` / `COMPLETED_WORK.md` | What's left and what's done |
 
----
-
-## Example Prompts
-
-These are models to learn from, not templates to fill in. Read them to understand the structure and tone, then write your own.
-
-| Prompt | What it demonstrates |
-|--------|---------------------|
-| `examples/prompts/first-session.md` | How to kick off a new story — stating the idea, the theme, what's settled, and what's open |
-| `examples/prompts/brainstorm-ship-arrival.md` | How to run a mid-story brainstorm — giving context, naming constraints, asking specific questions |
+Built with Electron, React, TypeScript, [TipTap](https://tiptap.dev) and Vitest.
