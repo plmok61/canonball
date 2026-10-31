@@ -1,6 +1,7 @@
 import { mergeTurns, type ModelInfo } from '../../shared/ai'
-import type { Adapter, FetchFn, ProviderConfig } from './adapter'
-import { httpError, networkError } from './errors'
+import type { Adapter, ProviderConfig } from './adapter'
+import { networkError } from './errors'
+import { send } from './http'
 import { parseSse } from './sse'
 
 export const OPENAI_BASE_URL = 'https://api.openai.com/v1'
@@ -17,20 +18,6 @@ function headers(cfg: ProviderConfig, json: boolean): Record<string, string> {
   if (json) h['Content-Type'] = 'application/json'
   if (cfg.apiKey) h.Authorization = `Bearer ${cfg.apiKey}`
   return h
-}
-
-async function send(cfg: ProviderConfig, fetchFn: FetchFn, url: string, init: RequestInit): Promise<Response> {
-  let res: Response
-  try {
-    res = await fetchFn(url, init)
-  } catch (err) {
-    throw networkError(cfg.provider, err, cfg.baseUrl)
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw httpError(cfg.provider, res.status, text)
-  }
-  return res
 }
 
 export const openaiCompat: Adapter = {
