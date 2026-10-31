@@ -117,7 +117,7 @@ it('a provider error becomes an error event', async () => {
 it('a missing key from resolve becomes an error event', async () => {
   const chat = createChatService({
     resolve: async () => {
-      throw new ProviderError('Add a OpenAI API key in Settings.')
+      throw new ProviderError('Add your OpenAI API key in Settings.')
     },
     fetch: async () => {
       throw new Error('unexpected fetch')
@@ -127,29 +127,56 @@ it('a missing key from resolve becomes an error event', async () => {
   chat.start(req(), c.send)
   await c.ended
   expect(c.events).toEqual([
-    { requestId: 'r1', kind: 'error', message: 'Add a OpenAI API key in Settings.' }
+    { requestId: 'r1', kind: 'error', message: 'Add your OpenAI API key in Settings.' }
   ])
 })
 
 it('an unexpected error is reported without details', async () => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+  let fetched = false
+  // A response whose `ok` getter throws escapes the adapter's error mapping, so
+  // a plain TypeError reaches the chat service after the request is in flight.
   const fetchFn: FetchFn = async () => {
-    throw new TypeError('secret internal detail')
+    fetched = true
+    return {
+      get ok(): boolean {
+        throw new TypeError('internal detail')
+      }
+    } as unknown as Response
   }
   const chat = createChatService({
-    resolve: async () => {
-      throw new TypeError('secret internal detail')
-    },
+    resolve: async () => ({ ...local, apiKey: 'sk-private-key' }),
     fetch: fetchFn
   })
   const c = collect()
-  chat.start(req(), c.send)
+  const secretText = 'Chapter nine: the lighthouse keeper lies'
+  chat.start(
+    {
+      requestId: 'req-private-id',
+      model: { provider: 'local', model: 'private-model' },
+      messages: [{ role: 'user', content: secretText }]
+    },
+    c.send
+  )
   await c.ended
+  expect(fetched).toBe(true)
   expect(c.events).toEqual([
-    { requestId: 'r1', kind: 'error', message: 'Something went wrong talking to Local server.' }
+    {
+      requestId: 'req-private-id',
+      kind: 'error',
+      message: 'Something went wrong talking to Local server.'
+    }
   ])
   expect(log).toHaveBeenCalled()
-  expect(JSON.stringify(log.mock.calls)).not.toContain('Hi')
+  const logged = JSON.stringify(log.mock.calls)
+  for (const leak of [
+    secretText,
+    'lighthouse',
+    'sk-private-key',
+    'req-private-id',
+    'private-model'
+  ])
+    expect(logged).not.toContain(leak)
 })
 
 it('ignores a duplicate active requestId and allows reuse once finished', async () => {

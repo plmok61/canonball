@@ -89,7 +89,7 @@ it('resolve without a key asks for one in Settings', async () => {
     secrets: fakeSecrets(),
     fetch: noFetch
   })
-  await expect(ai.resolve('anthropic')).rejects.toThrow('Add a Anthropic API key in Settings.')
+  await expect(ai.resolve('anthropic')).rejects.toThrow('Add your Anthropic API key in Settings.')
   await expect(ai.resolve('local')).rejects.toThrow('Add a local server URL in Settings.')
   await ai.setApiKey('anthropic', 'sk-ant')
   expect(await ai.resolve('anthropic')).toEqual({

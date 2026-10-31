@@ -49,7 +49,7 @@ export function createAiConfig(deps: {
       return { provider: 'local', apiKey: null, baseUrl: url }
     }
     const key = await secrets.get(p)
-    if (!key) throw new ProviderError(`Add a ${PROVIDER_LABEL[p]} API key in Settings.`)
+    if (!key) throw new ProviderError(`Add your ${PROVIDER_LABEL[p]} API key in Settings.`)
     return { provider: p, apiKey: key, baseUrl: BASE_URL[p] }
   }
 
