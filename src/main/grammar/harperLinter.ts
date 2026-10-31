@@ -15,6 +15,9 @@ export interface TextLinter {
 
 const MAX_SUGGESTIONS = 5
 
+/** Harper lint kinds that Chromium's spellchecker owns; these are dropped in main. */
+export const SPELLING_KINDS: ReadonlySet<string> = new Set(['Spelling', 'Typo'])
+
 function normalizeSuggestion(
   kind: number,
   text: string,
@@ -71,7 +74,7 @@ export async function createHarperLinter(): Promise<TextLinter> {
       const out: GrammarLint[][] = []
       for (const text of texts) {
         const lints = await linter.lint(text, { language: 'plaintext' })
-        out.push(lints.map(toGrammarLint))
+        out.push(lints.filter((l) => !SPELLING_KINDS.has(l.lint_kind())).map(toGrammarLint))
       }
       return out
     }

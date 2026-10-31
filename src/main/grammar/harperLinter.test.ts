@@ -28,6 +28,13 @@ describe('real Harper', () => {
     expect(await linter.lint(['Her eyes are grey.', 'A xylofrabble sat.'])).toEqual([[], []])
   })
 
+  it('leaves typo-style spelling to Chromium', async () => {
+    expect(await linter.lint(['Teh cat sat.'])).toEqual([[]])
+    // Grammar control: the same linter still reports grammar.
+    const [lints] = await linter.lint(['She go home.'])
+    expect(lints).toHaveLength(1)
+  })
+
   it('returns one result array per text, in order', async () => {
     const out = await linter.lint(['Fine.', 'i went.'])
     expect(out).toHaveLength(2)
