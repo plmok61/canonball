@@ -49,6 +49,23 @@ export interface GrammarLint {
   suggestions: GrammarSuggestion[]
 }
 
+export type Access = 'edit' | 'read' | 'hidden'
+
+export interface ProjectSettings {
+  version: 1
+  prose: string[]
+  access: Record<string, Access>
+}
+
+export interface ProjectAccess {
+  /** All-read empty settings when missing or unreadable. */
+  settings: ProjectSettings
+  /** True only when the settings file does not exist. */
+  needsProsePrompt: boolean
+  /** True when the file exists but failed to parse or validate. */
+  unreadable: boolean
+}
+
 export interface CanonballApi {
   openProjectDialog(): Promise<ProjectInfo | null>
   newProjectDialog(): Promise<ProjectInfo | null>
