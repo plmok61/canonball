@@ -3,6 +3,7 @@ import { join } from 'path'
 import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
 import { buildMenuTemplate } from './menu'
+import { buildContextMenuTemplate } from './contextMenu'
 import { isSafeExternalUrl } from './navigation'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -21,7 +22,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: true
     }
   })
 
@@ -76,6 +78,17 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     if (isSafeExternalUrl(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Right-click: spelling suggestions (Chromium flags, the writer applies) and
+  // cut/copy/paste. No menu when there is nothing to offer.
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const wc = mainWindow.webContents
+    const template = buildContextMenuTemplate(params, {
+      replaceMisspelling: (w) => wc.replaceMisspelling(w),
+      learnWord: (w) => wc.session.addWordToSpellCheckerDictionary(w)
+    })
+    if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: mainWindow })
   })
 
   // HMR for renderer base on electron-vite cli.

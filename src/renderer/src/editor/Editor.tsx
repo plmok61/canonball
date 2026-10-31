@@ -56,6 +56,9 @@ function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
     extensions,
     editable: false,
     immediatelyRender: false,
+    editorProps: {
+      attributes: { spellcheck: 'true', autocorrect: 'off', autocapitalize: 'off' }
+    },
     onUpdate: ({ editor: e }) => {
       autosave.current?.change(serializeEditor(e, doc.current))
     }

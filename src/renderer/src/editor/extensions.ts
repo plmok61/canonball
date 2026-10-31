@@ -39,7 +39,7 @@ function rawAttribute(): { raw: { default: string; rendered: false } } {
 }
 
 function hintAttributes(raw: string): Record<string, string> {
-  return { class: 'cb-hint', contenteditable: 'false', 'data-cb-comment': raw }
+  return { class: 'cb-hint', contenteditable: 'false', spellcheck: 'false', 'data-cb-comment': raw }
 }
 
 function parseRaw(element: HTMLElement): { raw: string } {
@@ -152,7 +152,7 @@ const FOOTNOTE_REF = /^\[\^[^\]\s]+\]/
 const FOOTNOTE_DEF = /^\[\^[^\]\s]+\]:[^\n]*(?:\n(?:[ \t]*\n)*(?: {4}|\t)[^\n]*)*(?:\n|$)/
 
 function rawAttributes(raw: string): Record<string, string> {
-  return { class: 'cb-raw', contenteditable: 'false', 'data-cb-raw': raw }
+  return { class: 'cb-raw', contenteditable: 'false', spellcheck: 'false', 'data-cb-raw': raw }
 }
 
 function parseRawSource(element: HTMLElement): { raw: string } {

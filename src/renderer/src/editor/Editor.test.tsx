@@ -347,3 +347,22 @@ it('undo after focus reload does not restore pre-reload text', async () => {
   expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('mine')
   expect(api.writeDoc).toHaveBeenCalledTimes(1)
 })
+
+it('the page is spellchecked and never autocorrected', async () => {
+  stub()
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  await ready()
+  const pm = document.querySelector('.ProseMirror')
+  expect(pm).toHaveAttribute('spellcheck', 'true')
+  expect(pm).toHaveAttribute('autocorrect', 'off')
+  expect(pm).toHaveAttribute('autocapitalize', 'off')
+})
+
+it('hints and raw nodes opt out of spellcheck', async () => {
+  stub('<!-- hint -->\n\nText <span>x</span>\n')
+  render(<Editor root="/p" relPath="canon/a.md" />)
+  await ready()
+  const nodes = document.querySelectorAll('.cb-hint, .cb-raw')
+  expect(nodes.length).toBeGreaterThan(0)
+  nodes.forEach((n) => expect(n).toHaveAttribute('spellcheck', 'false'))
+})
