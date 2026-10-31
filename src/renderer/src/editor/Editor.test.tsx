@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import '@testing-library/jest-dom/vitest'
 import type { Editor as TipTapEditor } from '@tiptap/core'
 import { Editor } from './Editor'
+import { __resetSaveRegistryForTests } from './saveRegistry'
 
 // jsdom lacks the layout APIs ProseMirror probes when scrolling/selecting.
 beforeAll(() => {
@@ -31,6 +32,7 @@ beforeAll(() => {
 afterEach(() => {
   vi.useRealTimers()
   cleanup()
+  __resetSaveRegistryForTests()
   vi.restoreAllMocks()
 })
 
@@ -234,4 +236,70 @@ it('rejects the flush request when an orphaned save still fails', async () => {
   const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
   await expect(handler()).rejects.toThrow('disk full')
   api.writeDoc.mockResolvedValue({ content: '', mtimeMs: 3 })
+})
+
+function diskStub(): { disk: Map<string, string>; api: ReturnType<typeof stub> } {
+  const api = stub()
+  const disk = new Map<string, string>([
+    ['canon/a.md', 'Alpha\n'],
+    ['canon/b.md', 'Beta\n']
+  ])
+  api.readDoc.mockImplementation(async (p: string) => ({ content: disk.get(p) ?? '', mtimeMs: 1 }))
+  api.writeDoc.mockImplementation(async (p: string, c: string) => {
+    disk.set(p, c)
+    return { content: c, mtimeMs: 2 }
+  })
+  return { disk, api }
+}
+
+it('reopening a file with a pending orphan save never loses either version (orphan succeeds)', async () => {
+  const { disk, api } = diskStub()
+  const { rerender } = render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  api.writeDoc.mockRejectedValueOnce(new Error('slow disk'))
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  rerender(<Editor relPath="canon/b.md" />)
+  await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
+  rerender(<Editor relPath="canon/a.md" />)
+  await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('typed'))
+  expect(disk.get('canon/a.md')).toContain('typed')
+  // a later edit in the new editor is the final word on disk
+  const editor2 = await ready()
+  act(() => {
+    editor2.commands.insertContent('newer ')
+  })
+  const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
+  await handler()
+  expect(disk.get('canon/a.md')).toContain('newer')
+  expect(disk.get('canon/a.md')).toContain('typed')
+})
+
+it('reopening a file with a pending orphan save never loses either version (orphan still failing)', async () => {
+  const { disk, api } = diskStub()
+  const { rerender } = render(<Editor relPath="canon/a.md" />)
+  const editor = await ready()
+  const realWrite = api.writeDoc.getMockImplementation()!
+  api.writeDoc.mockRejectedValue(new Error('disk full'))
+  act(() => {
+    editor.commands.insertContent('typed ')
+  })
+  rerender(<Editor relPath="canon/b.md" />)
+  await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
+  rerender(<Editor relPath="canon/a.md" />)
+  await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('typed'))
+  const editor2 = await ready()
+  act(() => {
+    editor2.commands.insertContent('newer ')
+  })
+  api.writeDoc.mockImplementation(realWrite)
+  const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
+  await handler()
+  expect(disk.get('canon/a.md')).toContain('typed')
+  expect(disk.get('canon/a.md')).toContain('newer')
+  // exactly one writer: no later write may bring back older text
+  const writesAfter = api.writeDoc.mock.calls.length
+  await new Promise((r) => setTimeout(r, 50))
+  expect(api.writeDoc.mock.calls.length).toBe(writesAfter)
 })

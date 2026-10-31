@@ -30,6 +30,11 @@ export class Autosave {
     return this.pending !== null || this.inFlight !== null
   }
 
+  /** Text accepted by change() that has not reached disk, if any. */
+  get unsaved(): string | null {
+    return this.pending
+  }
+
   get hasFailed(): boolean {
     return this.failed
   }

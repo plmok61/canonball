@@ -4,7 +4,7 @@ import type { Editor as TipTapEditor } from '@tiptap/core'
 import { Autosave } from './autosave'
 import { createExtensions } from './extensions'
 import { loadIntoEditor, serializeEditor, type OpenDoc } from './markdown'
-import { flushAll, orphan } from './saveRegistry'
+import { flushAll, orphan, settleOrphan } from './saveRegistry'
 import { Toolbar } from './Toolbar'
 import { countWords } from './wordCount'
 import './editor.css'
@@ -58,15 +58,23 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
   useEffect(() => {
     if (!editor) return
     let cancelled = false
-    window.canonball
-      .readDoc(relPath)
-      .then((file) => {
+    settleOrphan(relPath)
+      .then(async (adopted) => ({ adopted, file: await window.canonball.readDoc(relPath) }))
+      .then(({ adopted, file }) => {
         if (cancelled || editor.isDestroyed) return
-        doc.current = loadIntoEditor(editor, file.content)
         mtime.current = file.mtimeMs
-        // Baseline is the serialized form, so edit-then-undo never rewrites a
-        // file whose round trip normalizes.
-        autosave.current = makeAutosave(serializeEditor(editor, doc.current))
+        if (adopted === null) {
+          doc.current = loadIntoEditor(editor, file.content)
+          // Baseline is the serialized form, so edit-then-undo never rewrites a
+          // file whose round trip normalizes.
+          autosave.current = makeAutosave(serializeEditor(editor, doc.current))
+        } else {
+          // A previous editor of this file could not save; keep its text and
+          // keep it dirty so this editor writes it.
+          doc.current = loadIntoEditor(editor, adopted)
+          autosave.current = makeAutosave(file.content)
+          autosave.current.change(adopted)
+        }
         editor.setEditable(true, false)
         setLoaded(true)
       })
@@ -76,7 +84,7 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
     window.canonball.onFlushRequest(() => flushAll(autosave.current))
     return () => {
       cancelled = true
-      if (autosave.current) orphan(autosave.current)
+      if (autosave.current) orphan(relPath, autosave.current)
     }
     // makeAutosave closes over relPath only, which is fixed for this instance
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,13 +94,18 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
     if (!editor || !loaded) return
     const onFocus = (): void => {
       if (autosave.current?.dirty) return
-      void window.canonball.readDoc(relPath).then((file) => {
-        if (editor.isDestroyed || autosave.current?.dirty) return
-        if (file.mtimeMs === mtime.current) return
-        doc.current = loadIntoEditor(editor, file.content)
-        mtime.current = file.mtimeMs
-        autosave.current = makeAutosave(serializeEditor(editor, doc.current))
-      })
+      void window.canonball
+        .readDoc(relPath)
+        .then((file) => {
+          if (editor.isDestroyed || autosave.current?.dirty) return
+          if (file.mtimeMs === mtime.current) return
+          doc.current = loadIntoEditor(editor, file.content)
+          mtime.current = file.mtimeMs
+          autosave.current = makeAutosave(serializeEditor(editor, doc.current))
+        })
+        .catch(() => {
+          // transient read failure: keep what is on screen, try again next focus
+        })
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
