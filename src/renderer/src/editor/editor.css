@@ -15,8 +15,8 @@
 }
 
 .cb-toolbar button[aria-pressed='true'] {
-  background: var(--selection);
-  color: var(--text-strong);
+  background: var(--active);
+  color: var(--active-text);
 }
 
 .cb-toolbar button {

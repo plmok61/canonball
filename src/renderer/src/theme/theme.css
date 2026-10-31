@@ -7,11 +7,14 @@
   --border: #e3e3e3;
   --text: #1e1e1e;
   --text-strong: #111111;
-  --text-muted: #888888;
-  --selection: #e6e1d6;
-  --accent-warn: #a06a00;
+  --text-muted: #6f6a62;
+  --selection: #d6c9a8;
+  --accent-warn: #8a5a00;
   --accent-warn-bg: #fbf3e2;
   --danger: #a63c2a;
+  /* Pressed toolbar buttons, the active picker segment, the selected tree row. */
+  --active: #6b6355;
+  --active-text: #fdfcfa;
 }
 
 [data-theme='dark'] {
@@ -22,9 +25,11 @@
   --border: #2e2c29;
   --text: #ddd7cc;
   --text-strong: #ece7dd;
-  --text-muted: #7a756c;
-  --selection: #2c2a26;
+  --text-muted: #9a9386;
+  --selection: #4d4536;
   --accent-warn: #d9a74a;
   --accent-warn-bg: #33291a;
   --danger: #d98a73;
+  --active: #b8ae9c;
+  --active-text: #1c1b19;
 }

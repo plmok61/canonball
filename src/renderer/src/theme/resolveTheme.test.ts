@@ -40,7 +40,9 @@ describe('theme.css', () => {
     '--text-muted',
     '--selection',
     '--accent-warn',
-    '--accent-warn-bg'
+    '--accent-warn-bg',
+    '--active',
+    '--active-text'
   ]
 
   it('dark block has no pure white or black', () => {
@@ -51,4 +53,48 @@ describe('theme.css', () => {
     expect(light).toContain(`${t}:`)
     expect(dark).toContain(`${t}:`)
   })
+
+  describe.each([
+    ['light', light],
+    ['dark', dark]
+  ])('%s contrast (WCAG)', (_name, body) => {
+    const c = (fg: string, bg: string): number => contrast(token(body, fg), token(body, bg))
+
+    it.each(['--bg', '--bg-sidebar', '--bg-chat'])('text and muted text on %s ≥ 4.5:1', (bg) => {
+      expect(c('--text', bg)).toBeGreaterThanOrEqual(4.5)
+      expect(c('--text-muted', bg)).toBeGreaterThanOrEqual(4.5)
+    })
+    it('text on --selection ≥ 4.5:1', () => {
+      expect(c('--text', '--selection')).toBeGreaterThanOrEqual(4.5)
+    })
+    it.each(['--bg', '--bg-sidebar'])('--active indicator stands out on %s ≥ 3:1', (bg) => {
+      expect(c('--active', bg)).toBeGreaterThanOrEqual(3)
+    })
+    it('text on --active ≥ 4.5:1', () => {
+      expect(c('--active-text', '--active')).toBeGreaterThanOrEqual(4.5)
+    })
+    it('warning text on --bg and on its own background ≥ 4.5:1', () => {
+      expect(c('--accent-warn', '--bg')).toBeGreaterThanOrEqual(4.5)
+      expect(c('--accent-warn', '--accent-warn-bg')).toBeGreaterThanOrEqual(4.5)
+    })
+  })
 })
+
+function token(body: string, name: string): string {
+  const m = body.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})\\s*;`, 'i'))
+  if (!m) throw new Error(`${name} is not a 6-digit hex colour`)
+  return m[1]
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
