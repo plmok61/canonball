@@ -4,6 +4,7 @@ import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
 import { isProse, nextAccess } from '../../shared/access'
+import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import { ProseDialog } from './tree/ProseDialog'
 import { sortTree } from './tree/sortTree'
@@ -31,6 +32,9 @@ function App(): React.JSX.Element {
   const [proseOpen, setProseOpen] = useState(false)
   const [proseBusy, setProseBusy] = useState(false)
   const [proseError, setProseError] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Bumped whenever an AI connection changes; the chat panel reloads on it.
+  const [, setAiVersion] = useState(0)
   const switching = useRef(false)
   const saving = useRef(false)
 
@@ -73,11 +77,17 @@ function App(): React.JSX.Element {
   useEffect(
     () =>
       window.canonball.onMenuCommand((command) => {
-        void switchProject(
-          command === 'open-project'
-            ? () => window.canonball.openProjectDialog()
-            : () => window.canonball.newProjectDialog()
-        )
+        switch (command) {
+          case 'open-settings':
+            setSettingsOpen(true)
+            break
+          case 'open-project':
+            void switchProject(() => window.canonball.openProjectDialog())
+            break
+          case 'new-project':
+            void switchProject(() => window.canonball.newProjectDialog())
+            break
+        }
       }),
     [switchProject]
   )
@@ -180,6 +190,13 @@ function App(): React.JSX.Element {
       })
   }
 
+  const settingsDialog = settingsOpen ? (
+    <SettingsDialog
+      onClose={() => setSettingsOpen(false)}
+      onChanged={() => setAiVersion((v) => v + 1)}
+    />
+  ) : null
+
   if (!ready) return <div className="app" />
 
   if (!project) {
@@ -193,7 +210,9 @@ function App(): React.JSX.Element {
         <button disabled={pending} onClick={() => pick(() => window.canonball.newProjectDialog())}>
           New Project…
         </button>
+        <button onClick={() => setSettingsOpen(true)}>Settings…</button>
         {error && <p role="alert">{error}</p>}
+        {settingsDialog}
       </div>
     )
   }
@@ -259,6 +278,7 @@ function App(): React.JSX.Element {
         )}
       </main>
       {dialog}
+      {settingsDialog}
       <aside data-testid="chat-panel">
         <ChatPlaceholder />
       </aside>

@@ -10,7 +10,7 @@ vi.mock('./editor/saveRegistry', async (importOriginal) => ({
   flushAll: vi.fn()
 }))
 
-type MenuCommand = 'open-project' | 'new-project'
+type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
 let menu: ((cmd: MenuCommand) => void) | null = null
 
 const noAccess = {
@@ -38,6 +38,13 @@ function stub(
     openProjectDialog: vi.fn(),
     newProjectDialog,
     refreshTree: vi.fn().mockResolvedValue([]),
+    getAiStatus: vi.fn().mockResolvedValue({
+      keys: { anthropic: false, openai: false, google: false },
+      localUrl: null,
+      model: null,
+      encryptionAvailable: true
+    }),
+    listModels: vi.fn().mockResolvedValue({ models: [], errors: [] }),
     getProjectAccess: vi.fn().mockResolvedValue(noAccess),
     setPathAccess: vi.fn().mockResolvedValue(noAccess),
     setProsePaths: vi.fn().mockResolvedValue(noAccess),
@@ -83,6 +90,19 @@ it('shows an error when creating a project fails', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'New Project…' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Folder is not empty')
   expect(screen.getByRole('button', { name: 'New Project…' })).toBeEnabled()
+})
+
+it('the settings menu command opens the dialog and does not create a project', async () => {
+  const create = vi.fn()
+  const api = stub(null, create)
+  render(<App />)
+  await screen.findByTestId('welcome')
+  act(() => menu!('open-settings'))
+  expect(await screen.findByRole('dialog', { name: 'AI connections' })).toBeInTheDocument()
+  expect(create).not.toHaveBeenCalled()
+  expect(api.openProjectDialog).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
 
 it('Open Project from the menu awaits the flush before showing the dialog', async () => {

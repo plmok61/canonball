@@ -22,6 +22,7 @@ export function buildMenuTemplate({
         accelerator: 'CmdOrCtrl+Shift+N',
         click: () => send('new-project')
       },
+      { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('open-settings') },
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit' }
     ]

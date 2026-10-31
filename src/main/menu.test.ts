@@ -18,6 +18,15 @@ it('File menu sends Open Project and New Project to the renderer', () => {
   expect(send.mock.calls).toEqual([['open-project'], ['new-project']])
 })
 
+it('File menu has Settings with Cmd+,', () => {
+  const send = vi.fn()
+  const all = items(buildMenuTemplate({ isMac: true, isDev: false, send }))
+  const settings = all.find((i) => i.label === 'Settings…')!
+  expect(settings.accelerator).toBe('CmdOrCtrl+,')
+  ;(settings.click as () => void)()
+  expect(send).toHaveBeenCalledWith('open-settings')
+})
+
 it('keeps the standard edit roles so editor shortcuts keep working', () => {
   const roles = items(buildMenuTemplate({ isMac: false, isDev: false, send: vi.fn() })).map(
     (i) => i.role

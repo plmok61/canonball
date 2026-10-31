@@ -35,7 +35,7 @@ export interface AppSettings {
   ai: { localUrl: string | null; model: ModelChoice | null }
 }
 
-export type MenuCommand = 'open-project' | 'new-project'
+export type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
 
 /** The renderer's reply to a flush request before the window closes. */
 export interface FlushResult {

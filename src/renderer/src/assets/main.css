@@ -192,3 +192,42 @@ body {
   gap: 8px;
   margin-top: 12px;
 }
+
+.cb-settings {
+  width: min(520px, 90vw);
+}
+
+.cb-settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cb-settings-row h3 {
+  margin: 0;
+}
+
+.cb-settings-status {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cb-settings-controls {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.cb-settings-controls input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cb-settings-check {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
