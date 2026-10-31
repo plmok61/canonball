@@ -48,16 +48,34 @@ async function editable(root: string): Promise<ProjectSettings> {
   return loaded.settings
 }
 
+/** Tail of the pending mutations per project root, so read-modify-writes never overlap. */
+const queues = new Map<string, Promise<unknown>>()
+
+function serialized<T>(root: string, fn: () => Promise<T>): Promise<T> {
+  const key = path.resolve(root)
+  const run = (queues.get(key) ?? Promise.resolve()).then(fn)
+  const tail = run.catch(() => undefined)
+  queues.set(key, tail)
+  void tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key)
+  })
+  return run
+}
+
 export async function setPathAccess(
   root: string,
   relPath: string,
   a: Access
 ): Promise<ProjectAccess> {
   if (!validPath(relPath)) throw new Error('Invalid path')
-  return saveProjectSettings(root, withAccess(await editable(root), relPath, a))
+  return serialized(root, async () =>
+    saveProjectSettings(root, withAccess(await editable(root), relPath, a))
+  )
 }
 
 export async function setProsePaths(root: string, prose: string[]): Promise<ProjectAccess> {
   if (!prose.every(validPath)) throw new Error('Invalid path')
-  return saveProjectSettings(root, withProse(await editable(root), [...new Set(prose)]))
+  return serialized(root, async () =>
+    saveProjectSettings(root, withProse(await editable(root), [...new Set(prose)]))
+  )
 }

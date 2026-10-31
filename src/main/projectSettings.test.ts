@@ -81,6 +81,25 @@ describe('project settings', () => {
     expect(a.settings.prose).toEqual(['drafts'])
   })
 
+  it('concurrent mutations are not lost', async () => {
+    await saveProjectSettings(root, DEFAULT_PROJECT_SETTINGS)
+    const a = setPathAccess(root, 'canon/a.md', 'read')
+    const b = setPathAccess(root, 'notes/b.md', 'hidden')
+    await Promise.all([a, b])
+    const { access } = (await loadProjectAccess(root)).settings
+    expect(access['canon/a.md']).toBe('read')
+    expect(access['notes/b.md']).toBe('hidden')
+  })
+
+  it('a failed mutation does not block the next one', async () => {
+    await fs.mkdir(path.dirname(file()))
+    await fs.writeFile(file(), '{oops')
+    const first = setPathAccess(root, 'canon', 'read')
+    const second = setProsePaths(root, ['drafts'])
+    await expect(first).rejects.toThrow('Project settings file is unreadable')
+    await expect(second).rejects.toThrow('Project settings file is unreadable')
+  })
+
   it('rejects escaping and empty paths', async () => {
     await expect(setPathAccess(root, '../x', 'read')).rejects.toThrow('Invalid path')
     await expect(setPathAccess(root, '', 'read')).rejects.toThrow('Invalid path')
