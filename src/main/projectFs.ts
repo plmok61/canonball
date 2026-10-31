@@ -25,6 +25,17 @@ export function resolveInside(root: string, relPath: string): string {
   return target
 }
 
+/**
+ * The root a renderer call is allowed to touch: the project it believes is open
+ * must still be the open project, so a save queued in project A can never land
+ * in project B after a switch.
+ */
+export function requireCurrentRoot(current: string | null, claimed: string): string {
+  if (!current) throw new Error('No project open')
+  if (claimed !== current) throw new Error('Project changed')
+  return current
+}
+
 export async function listTree(root: string, rel = ''): Promise<TreeNode[]> {
   const dir = rel ? path.join(root, rel) : root
   const entries = await fsp.readdir(dir, { withFileTypes: true })

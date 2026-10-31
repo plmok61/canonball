@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectInfo, TreeNode } from '../../shared/types'
 import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
+import { flushAll } from './editor/saveRegistry'
 import { FileTree } from './tree/FileTree'
 import { sortTree } from './tree/sortTree'
 import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
+
+function message(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
 
 function App(): React.JSX.Element {
   const { theme, setTheme } = useTheme()
@@ -15,6 +20,52 @@ function App(): React.JSX.Element {
   const [pending, setPending] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [refreshed, setRefreshed] = useState<{ root: string; tree: TreeNode[] } | null>(null)
+  const switching = useRef(false)
+
+  /**
+   * Open or create a project. Everything typed so far is saved first; if that
+   * fails the current project stays open, so no text is left behind.
+   */
+  const switchProject = useCallback(
+    async (pick: () => Promise<ProjectInfo | null>): Promise<void> => {
+      if (switching.current) return
+      switching.current = true
+      setError(null)
+      setPending(true)
+      try {
+        try {
+          await flushAll()
+        } catch (e) {
+          setError(`Couldn't save your changes, so the project was not switched: ${message(e)}`)
+          return
+        }
+        const info = await pick()
+        if (info) {
+          setSelectedPath(null)
+          setRefreshed(null)
+          setProject(info)
+        }
+      } catch (e) {
+        setError(message(e))
+      } finally {
+        switching.current = false
+        setPending(false)
+      }
+    },
+    []
+  )
+
+  useEffect(
+    () =>
+      window.canonball.onMenuCommand((command) => {
+        void switchProject(
+          command === 'open-project'
+            ? () => window.canonball.openProjectDialog()
+            : () => window.canonball.newProjectDialog()
+        )
+      }),
+    [switchProject]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -56,18 +107,7 @@ function App(): React.JSX.Element {
   if (!ready) return <div className="app" />
 
   if (!project) {
-    const pick = async (fn: () => Promise<ProjectInfo | null>): Promise<void> => {
-      setError(null)
-      setPending(true)
-      try {
-        const info = await fn()
-        if (info) setProject(info)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        setPending(false)
-      }
-    }
+    const pick = switchProject
     return (
       <div className="welcome" data-testid="welcome">
         <h1>Canonball</h1>
@@ -85,6 +125,11 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <aside data-testid="tree-panel">
+        {error && (
+          <p role="alert" className="cb-app-error">
+            {error}
+          </p>
+        )}
         <FileTree tree={sorted} selected={selectedPath} onOpen={setSelectedPath} />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />
@@ -92,7 +137,7 @@ function App(): React.JSX.Element {
       </aside>
       <main data-testid="editor-panel">
         {selectedPath ? (
-          <Editor relPath={selectedPath} />
+          <Editor root={project.root} relPath={selectedPath} />
         ) : (
           <p className="editor-empty">Choose a file from the project</p>
         )}

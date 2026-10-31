@@ -1,7 +1,7 @@
 import { app, dialog, ipcMain, nativeTheme, BrowserWindow } from 'electron'
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
-import { createProject, listTree, readDoc, writeDoc } from './projectFs'
+import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import { loadSettings, saveSettings } from './appSettings'
 import type { AppSettings, ProjectInfo } from '../shared/types'
 
@@ -69,8 +69,8 @@ export function registerIpc(): void {
   ipcMain.handle('canonball:openProject', (_e, root: string) => openProject(root))
   ipcMain.handle('canonball:refreshTree', () => listTree(requireRoot()))
   ipcMain.handle('canonball:readDoc', (_e, relPath: string) => readDoc(requireRoot(), relPath))
-  ipcMain.handle('canonball:writeDoc', (_e, relPath: string, content: string) =>
-    writeDoc(requireRoot(), relPath, content)
+  ipcMain.handle('canonball:writeDoc', (_e, root: string, relPath: string, content: string) =>
+    writeDoc(requireCurrentRoot(currentRoot, root), relPath, content)
   )
   ipcMain.handle('canonball:getSettings', () => loadSettings(settingsFile()))
   ipcMain.handle('canonball:setSettings', (_e, patch: Partial<AppSettings>) =>

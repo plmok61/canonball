@@ -4,7 +4,7 @@ import type { Editor as TipTapEditor } from '@tiptap/core'
 import { Autosave } from './autosave'
 import { createExtensions } from './extensions'
 import { loadIntoEditor, serializeEditor, type OpenDoc } from './markdown'
-import { flushAll, orphan, settleOrphan } from './saveRegistry'
+import { flushAll, orphan, registerLive, settleOrphan } from './saveRegistry'
 import { Toolbar } from './Toolbar'
 import { countWords } from './wordCount'
 import './editor.css'
@@ -19,12 +19,18 @@ function visibleWords(editor: TipTapEditor): number {
   return countWords(text)
 }
 
-export function Editor({ relPath }: { relPath: string }): React.JSX.Element {
-  // A fresh instance per file keeps load, autosave and flush scoped to one path.
-  return <FileEditor key={relPath} relPath={relPath} />
+interface EditorProps {
+  /** The project this file belongs to; every save is checked against it. */
+  root: string
+  relPath: string
 }
 
-function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
+export function Editor({ root, relPath }: EditorProps): React.JSX.Element {
+  // A fresh instance per file keeps load, autosave and flush scoped to one path.
+  return <FileEditor key={`${root}\0${relPath}`} root={root} relPath={relPath} />
+}
+
+function FileEditor({ root, relPath }: EditorProps): React.JSX.Element {
   const extensions = useMemo(() => createExtensions(), [])
   const [loaded, setLoaded] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -41,7 +47,7 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
       onDirtyChange: setDirty,
       onErrorChange: setFailed,
       save: async (content) => {
-        const saved = await window.canonball.writeDoc(relPath, content)
+        const saved = await window.canonball.writeDoc(root, relPath, content)
         mtime.current = saved.mtimeMs
       }
     })
@@ -82,11 +88,13 @@ function FileEditor({ relPath }: { relPath: string }): React.JSX.Element {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e))
       })
     window.canonball.onFlushRequest(() => flushAll(autosave.current))
+    const unregister = registerLive(() => autosave.current)
     return () => {
       cancelled = true
+      unregister()
       if (autosave.current) orphan(relPath, autosave.current)
     }
-    // makeAutosave closes over relPath only, which is fixed for this instance
+    // makeAutosave closes over root and relPath only, which are fixed for this instance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, relPath])
 

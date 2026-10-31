@@ -13,6 +13,17 @@ interface Orphan {
  */
 const orphans = new Map<string, Orphan>()
 
+/** The open editor's autosave, so whole-app flushes (project switch) include it. */
+let live: (() => Autosave | null) | null = null
+
+/** Register the open editor's autosave source; returns an unregister. */
+export function registerLive(source: () => Autosave | null): () => void {
+  live = source
+  return () => {
+    if (live === source) live = null
+  }
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 /** Take over an Autosave on unmount: keep retrying until its text is saved. */
@@ -55,9 +66,12 @@ export async function settleOrphan(path: string): Promise<string | null> {
   }
 }
 
-/** Flush the live autosave and every orphan; rejects if any still fails. */
-export async function flushAll(live: Autosave | null): Promise<void> {
-  const all = [...(live ? [live] : []), ...[...orphans.values()].map((o) => o.autosave)]
+/**
+ * Flush the open editor's autosave (or `current`, when given) and every orphan;
+ * rejects if any still fails.
+ */
+export async function flushAll(current: Autosave | null = live?.() ?? null): Promise<void> {
+  const all = [...(current ? [current] : []), ...[...orphans.values()].map((o) => o.autosave)]
   const results = await Promise.allSettled(all.map((a) => a.flush()))
   const failed = results.find((r) => r.status === 'rejected')
   if (failed) throw (failed as PromiseRejectedResult).reason
@@ -65,4 +79,5 @@ export async function flushAll(live: Autosave | null): Promise<void> {
 
 export function __resetSaveRegistryForTests(): void {
   orphans.clear()
+  live = null
 }

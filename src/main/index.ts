@@ -1,7 +1,8 @@
-import { app, dialog, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, dialog, shell, BrowserWindow, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import { applyStoredTheme, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
+import { buildMenuTemplate } from './menu'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -101,6 +102,19 @@ app.whenReady().then(async () => {
 
   registerIpc()
   await applyStoredTheme()
+
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildMenuTemplate({
+        isMac: process.platform === 'darwin',
+        isDev: is.dev,
+        send: (command) => {
+          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+          win?.webContents.send('canonball:menu', command)
+        }
+      })
+    )
+  )
 
   createWindow()
 

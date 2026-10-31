@@ -90,3 +90,11 @@ body {
   color: var(--text-muted);
   text-align: center;
 }
+
+.cb-app-error {
+  margin: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent-warn);
+  font-size: 12px;
+}

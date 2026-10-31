@@ -2,7 +2,14 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createProject, listTree, readDoc, resolveInside, writeDoc } from './projectFs'
+import {
+  createProject,
+  listTree,
+  readDoc,
+  requireCurrentRoot,
+  resolveInside,
+  writeDoc
+} from './projectFs'
 import type { TreeNode } from '../shared/types'
 
 let tmp: string
@@ -24,6 +31,14 @@ describe('resolveInside', () => {
     expect(() => resolveInside(root, '/etc/passwd')).toThrow('Path escapes project')
     expect(() => resolveInside(root, 'link/x.md')).toThrow('Path escapes project')
     expect(resolveInside(root, 'canon/a.md')).toBe(path.join(root, 'canon', 'a.md'))
+  })
+})
+
+describe('requireCurrentRoot', () => {
+  it('returns the root only when it is the project the caller believes is open', () => {
+    expect(requireCurrentRoot('/a', '/a')).toBe('/a')
+    expect(() => requireCurrentRoot('/b', '/a')).toThrow('Project changed')
+    expect(() => requireCurrentRoot(null, '/a')).toThrow('No project open')
   })
 })
 

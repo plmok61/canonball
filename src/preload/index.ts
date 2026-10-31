@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CanonballApi, FlushResult } from '../shared/types'
+import type { CanonballApi, FlushResult, MenuCommand } from '../shared/types'
 
 let flushHandler: (() => Promise<void>) | null = null
 
@@ -19,11 +19,19 @@ const api: CanonballApi = {
   openProject: (root) => ipcRenderer.invoke('canonball:openProject', root),
   refreshTree: () => ipcRenderer.invoke('canonball:refreshTree'),
   readDoc: (relPath) => ipcRenderer.invoke('canonball:readDoc', relPath),
-  writeDoc: (relPath, content) => ipcRenderer.invoke('canonball:writeDoc', relPath, content),
+  writeDoc: (root, relPath, content) =>
+    ipcRenderer.invoke('canonball:writeDoc', root, relPath, content),
   getSettings: () => ipcRenderer.invoke('canonball:getSettings'),
   setSettings: (patch) => ipcRenderer.invoke('canonball:setSettings', patch),
   onFlushRequest: (handler) => {
     flushHandler = handler
+  },
+  onMenuCommand: (handler) => {
+    const listener = (_e: Electron.IpcRendererEvent, command: MenuCommand): void => handler(command)
+    ipcRenderer.on('canonball:menu', listener)
+    return () => {
+      ipcRenderer.removeListener('canonball:menu', listener)
+    }
   }
 }
 
