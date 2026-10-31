@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react'
-import type { ProjectInfo } from '../../shared/types'
+import { useEffect, useMemo, useState } from 'react'
+import type { ProjectInfo, TreeNode } from '../../shared/types'
 import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
+import { FileTree } from './tree/FileTree'
+import { sortTree } from './tree/sortTree'
 
 function App(): React.JSX.Element {
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  // Task 6 wires the file tree to this.
-  const [selectedPath] = useState<string | null>(null)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [refreshed, setRefreshed] = useState<{ root: string; tree: TreeNode[] } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +31,24 @@ function App(): React.JSX.Element {
       cancelled = true
     }
   }, [])
+
+  const root = project?.root
+  useEffect(() => {
+    if (!root) return
+    const refresh = (): void => {
+      window.canonball
+        .refreshTree()
+        .then((t) => setRefreshed({ root, tree: t }))
+        .catch(() => {
+          // keep the last known tree
+        })
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [root])
+
+  const tree = refreshed && refreshed.root === project?.root ? refreshed.tree : project?.tree
+  const sorted = useMemo(() => sortTree(tree ?? []), [tree])
 
   if (!ready) return <div className="app" />
 
@@ -61,7 +81,9 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <aside data-testid="tree-panel" />
+      <aside data-testid="tree-panel">
+        <FileTree tree={sorted} selected={selectedPath} onOpen={setSelectedPath} />
+      </aside>
       <main data-testid="editor-panel">
         {selectedPath ? (
           <Editor relPath={selectedPath} />
