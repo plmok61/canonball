@@ -1,66 +1,35 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Purpose
+## What this is
 
-This is a **reusable scaffold for AI-assisted creative writing projects**. It provides a starting structure and workflow conventions that can be copied and adapted for new fiction projects.
+Canonball is a desktop writing app ("Cursor for writers, with one inversion"): the writer writes the prose, and the AI keeps notes, answers questions and helps brainstorm. Files on disk are plain markdown, and writers never see raw markdown syntax.
 
-## Directory Structure
+## Stack
 
-```
-project/
-├── CLAUDE.md               # This guidance file (project-specific overrides go here)
-├── README.md               # Premise, high-level story concept, inspirations
-├── canon/                  # Single source of truth — authoritative and stable
-│   ├── characters.md       # Character biographies, psychology, motivations, relationships
-│   ├── themes.md           # Core themes, philosophical question, explicit constraints
-│   ├── world.md            # Setting, world-building, rules, context
-│   └── timeline.md         # Chronological events and story beats
-├── outline/
-│   └── outline.md          # Chapter-by-chapter breakdown with POV and thematic assignments
-├── notes/                  # Raw brainstorming — informal, unstructured, may contradict canon
-├── drafts/
-│   ├── chapters/           # Prose drafts organized by chapter number
-│   │   └── <ch-number>/    # e.g., 1/, 2/, etc.
-│   └── full/               # Complete manuscript iterations
-├── sessions/               # Per-session logs for continuity across Claude conversations
-├── memory/                 # Claude session memory (loaded each session for continuity)
-│   ├── MEMORY.md           # Memory index
-│   ├── user_profile.md     # Author background, preferences
-│   └── feedback_tone.md    # Tone register, style notes from prior sessions
-└── .claude/
-    └── settings.local.json # Minimal permissions (e.g., WebSearch if research is needed)
-```
+Electron + React + TypeScript, built with electron-vite. Editor: TipTap (free, open-source packages only). Tests: Vitest, with tests next to the code as `*.test.ts(x)`.
 
-## Core Working Conventions
+- `npm run dev` starts the app.
+- `npm test` runs the test suite.
+- `npm run build` builds the app.
 
-**Canon is authoritative.** When writing drafts or brainstorming, always check `canon/` files for consistency with established characters, world rules, timeline, and themes.
+## Where things live
 
-**Notes are exploratory.** Content in `notes/` may contradict canon — it feeds canon, not the reverse.
+- Design spec: `docs/superpowers/specs/2026-10-31-canonball-app-design.md`
+- Roadmap and phase plans: `docs/superpowers/plans/`
+- Open work: `OPEN_WORK.md` (move finished items to `COMPLETED_WORK.md`)
+- New-project scaffold copied for each new writer project: `template/` (`canon/`, `notes/`, `outline/`, `drafts/`, `sessions/`, `memory/`)
+- AI-isms reference material: `docs/reference/`
+- `examples/` holds sample material; leave it alone.
 
-**Draft naming.** Version drafts clearly within each chapter folder (e.g., `draft1.md`, `draft2.md`, `draft2-author.md` for author-written versions).
+## Hard rules
 
-**Memory continuity.** Read `memory/` at the start of each session to restore tonal and stylistic context from previous sessions.
-
-**Session logs.** At the end of each writing session, create a file in `sessions/` (using `session-template.md`) recording decisions made, files touched, and where to pick up next time.
+- **The AI never edits prose folders** (`drafts/` today; configurable prose folders arrive in Phase 3). No continue-writing, rewrite-selection, or ghost-text features, ever. Every AI edit elsewhere is shown to the writer for Accept/Reject.
+- The app never writes a file the writer didn't change.
+- The renderer touches the disk only through `window.canonball`. Every project-relative path is resolved inside the project root (`resolveInside`), and escapes are rejected.
+- `contextIsolation: true`, `nodeIntegration: false`.
 
 ## Writing Style
 
-Apply the rules in `memory/style_rules.md` whenever generating prose drafts or dialogue. These rules exist to prevent common AI writing patterns that make fiction feel generic. Check them before writing any prose, the same way you check `canon/characters.md` for character consistency.
-
-## Canon File Conventions
-
-Each `canon/characters.md` entry should cover: Role, Biography, Appearance, Psychology, Motivation, and key relationships. Character bios function as worldview documents — not just who they are but how they see the world.
-
-`canon/themes.md` should include explicit **constraints** — what the story must never do — alongside what it must accomplish. This prevents drift across long writing sessions.
-
-## Scaffold Setup for a New Project
-
-1. Copy this scaffold directory
-2. Update `README.md` with the new premise
-3. Populate `canon/` files before writing any prose
-4. Write `outline/outline.md` with chapter structure and thematic assignments
-5. Begin prose in `drafts/chapters/`
-6. Use `notes/` freely for brainstorming without worrying about consistency
-7. Promote resolved ideas from `notes/` into `canon/`
+Apply the rules in `template/memory/style_rules.md` whenever generating prose or dialogue, and check `template/memory/names_to_avoid.md` for names. These rules exist to prevent common AI writing patterns that make fiction feel generic.
