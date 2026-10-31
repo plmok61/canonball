@@ -57,7 +57,7 @@ Clicking a badge cycles it. A file inherits its folder's setting unless it has i
 
 **Center: editor.** A page-like WYSIWYG editor with a serif body font and a comfortable line length. The toolbar has bold, italic, headings, block quote, lists, and scene break (saved as a markdown horizontal rule). A status bar shows the file path, word count, and save state. Saving is automatic. When a draft is open, a banner says "Draft — AI won't edit." Spelling and grammar issues show as underlines, with suggestions on click or right-click.
 
-**Non-prose markdown** *(Claude's call)*: YAML front matter and HTML comments are kept exactly as they are but hidden in the editor; they're not editable in this version. Tables (TipTap's free table extension) and links can be both displayed and edited. The markdown round trip must never drop or rewrite content the editor doesn't understand.
+**Non-prose markdown** *(Claude's call)*: YAML front matter is kept exactly as it is but hidden in the editor. HTML comments are kept exactly as they are and shown as faint, non-editable hint text, because the template files use them as fill-in guidance (e.g. "One sentence: job title, company…") and hiding them would leave a new project's canon files looking empty. Neither is editable in this version. Tables (TipTap's free table extension) and links can be both displayed and edited. The markdown round trip must never drop or rewrite content the editor doesn't understand.
 
 **Right: AI chat.** It has a model picker at the top, the conversation, and an input box. When the AI wants to change a file, the change appears as an **Accept / Reject card** showing the file and the added and removed text. Nothing is written until the writer accepts.
 

@@ -2,12 +2,18 @@
 
 Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_WORK.md` when finished.
 
-Design: `docs/superpowers/specs/2026-10-31-canonball-app-design.md`
+- Design: `docs/superpowers/specs/2026-10-31-canonball-app-design.md`
+- Roadmap (how to start each phase in a fresh session): `docs/superpowers/plans/2026-10-31-roadmap.md`
 
-## Now
+## Build phases
 
-- [ ] Author review and approval of the design doc
-- [ ] Write the implementation plan from the approved design
+- [ ] **Phase 1: Editor shell.** Plan: `docs/superpowers/plans/2026-10-31-phase-1-editor-shell.md`
+- [ ] **Phase 2: Writing aids.** Spellcheck and Harper grammar (plan to write)
+- [ ] **Phase 3: AI permissions.** Badges, prose folders, access layer (plan to write)
+- [ ] **Phase 4: AI connection & chat.** Providers, Keychain, model picker, chat (plan to write)
+- [ ] **Phase 5: AI file tools & proposals.** Tools, Accept/Reject cards, style rules (plan to write)
+- [ ] **Phase 6: Brainstorm sessions.** (plan to write)
+- [ ] **Phase 7: Package & release.** Mac build, README, license (plan to write)
 
 ## Decide later (after using the app)
 
@@ -18,4 +24,3 @@ Design: `docs/superpowers/specs/2026-10-31-canonball-app-design.md`
 
 - [ ] Export to Word, EPUB, PDF (once the decisions above are made)
 - [ ] Windows and Linux builds
-- [ ] Choose an open-source license and publish
