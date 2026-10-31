@@ -46,6 +46,9 @@ const api: CanonballApi = {
   listModels: () => ipcRenderer.invoke('canonball:listModels'),
   startChat: (req) => ipcRenderer.invoke('canonball:startChat', req),
   cancelChat: (requestId) => ipcRenderer.invoke('canonball:cancelChat', requestId),
+  listChats: () => ipcRenderer.invoke('canonball:listChats'),
+  loadChat: (id) => ipcRenderer.invoke('canonball:loadChat', id),
+  saveChat: (root, thread) => ipcRenderer.invoke('canonball:saveChat', root, thread),
   onChatEvent: (handler) => {
     const listener = (_e: Electron.IpcRendererEvent, event: ChatEvent): void => handler(event)
     ipcRenderer.on('canonball:chatEvent', listener)

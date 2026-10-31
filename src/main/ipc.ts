@@ -7,10 +7,12 @@ import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
 import { createSecretStore } from './ai/secrets'
 import { createAiConfig, type AiConfig } from './ai/aiConfig'
+import { listChats, loadChat, saveChat } from './chats'
 import { createChatService, type ChatService } from './ai/chatService'
 import {
   CLOUD_PROVIDERS,
   parseChatRequest,
+  parseChatThread,
   parseModelChoice,
   type CloudProvider,
   type ModelChoice
@@ -182,5 +184,17 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
   ipcMain.handle('canonball:cancelChat', (_e, requestId: unknown) => {
     if (typeof requestId !== 'string') throw new Error('Invalid argument')
     chat().cancel(requestId)
+  })
+  ipcMain.handle('canonball:listChats', () => listChats(requireRoot()))
+  ipcMain.handle('canonball:loadChat', (_e, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('Invalid argument')
+    return loadChat(requireRoot(), id)
+  })
+  ipcMain.handle('canonball:saveChat', (_e, root: unknown, thread: unknown) => {
+    if (typeof root !== 'string') throw new Error('Invalid argument')
+    const r = requireCurrentRoot(currentRoot, root)
+    const parsed = parseChatThread(thread)
+    if (!parsed) throw new Error('Invalid argument')
+    return saveChat(r, parsed)
   })
 }

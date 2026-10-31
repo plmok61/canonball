@@ -1,4 +1,13 @@
-import type { AiStatus, ChatEvent, ChatRequest, CloudProvider, ModelChoice, ModelList } from './ai'
+import type {
+  AiStatus,
+  ChatEvent,
+  ChatSummary,
+  ChatThread,
+  ChatRequest,
+  CloudProvider,
+  ModelChoice,
+  ModelList
+} from './ai'
 export interface TreeNode {
   name: string
   relPath: string
@@ -101,6 +110,10 @@ export interface CanonballApi {
   /** Starts a stream; events arrive on onChatEvent. */
   startChat(req: ChatRequest): Promise<void>
   cancelChat(requestId: string): Promise<void>
+  /** Saved chat threads of the open project, newest first. */
+  listChats(): Promise<ChatSummary[]>
+  loadChat(id: string): Promise<ChatThread>
+  saveChat(root: string, thread: ChatThread): Promise<void>
   /** Subscribe to chat stream events; returns an unsubscribe. */
   onChatEvent(handler: (e: ChatEvent) => void): () => void
 }
