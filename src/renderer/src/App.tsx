@@ -5,6 +5,8 @@ import ChatPlaceholder from './chat/ChatPlaceholder'
 function App(): React.JSX.Element {
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [ready, setReady] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -29,18 +31,27 @@ function App(): React.JSX.Element {
 
   if (!project) {
     const pick = async (fn: () => Promise<ProjectInfo | null>): Promise<void> => {
-      const info = await fn()
-      if (info) setProject(info)
+      setError(null)
+      setPending(true)
+      try {
+        const info = await fn()
+        if (info) setProject(info)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setPending(false)
+      }
     }
     return (
       <div className="welcome" data-testid="welcome">
         <h1>Canonball</h1>
-        <button onClick={() => pick(() => window.canonball.openProjectDialog())}>
+        <button disabled={pending} onClick={() => pick(() => window.canonball.openProjectDialog())}>
           Open Project…
         </button>
-        <button onClick={() => pick(() => window.canonball.newProjectDialog())}>
+        <button disabled={pending} onClick={() => pick(() => window.canonball.newProjectDialog())}>
           New Project…
         </button>
+        {error && <p role="alert">{error}</p>}
       </div>
     )
   }

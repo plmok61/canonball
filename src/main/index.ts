@@ -1,5 +1,8 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { registerIpc } from './ipc'
+import { createCloseHandler } from './closeFlush'
+
+let quitting = false
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -21,26 +24,28 @@ function createWindow(): void {
   })
 
   // Close-flush handshake: let the renderer save pending edits before closing.
-  let closing = false
-  mainWindow.on('close', (event) => {
-    if (closing) return
-    event.preventDefault()
-    closing = true
-    let done = false
-    const finish = (): void => {
-      if (done) return
-      done = true
-      ipcMain.removeListener('canonball:flush-done', onDone)
-      clearTimeout(timer)
-      if (!mainWindow.isDestroyed()) mainWindow.close()
-    }
-    const onDone = (e: Electron.IpcMainEvent): void => {
-      if (e.sender === mainWindow.webContents) finish()
-    }
-    const timer = setTimeout(finish, 3000)
-    ipcMain.on('canonball:flush-done', onDone)
-    mainWindow.webContents.send('canonball:flush-request')
-  })
+  mainWindow.on(
+    'close',
+    createCloseHandler({
+      requestFlush: () => mainWindow.webContents.send('canonball:flush-request'),
+      onFlushDone: (cb) => {
+        const listener = (e: Electron.IpcMainEvent): void => {
+          if (e.sender === mainWindow.webContents) cb()
+        }
+        ipcMain.on('canonball:flush-done', listener)
+        return () => ipcMain.removeListener('canonball:flush-done', listener)
+      },
+      setTimer: (cb) => {
+        const t = setTimeout(cb, 3000)
+        return () => clearTimeout(t)
+      },
+      closeWindow: () => {
+        if (!mainWindow.isDestroyed()) mainWindow.close()
+      },
+      quitApp: () => app.quit(),
+      isQuitting: () => quitting
+    })
+  )
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -63,6 +68,10 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+app.on('before-quit', () => {
+  quitting = true
+})
+
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.canonball.app')
