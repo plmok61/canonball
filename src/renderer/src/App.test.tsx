@@ -22,7 +22,7 @@ const noAccess = {
 function stub(
   lastProjectRoot: string | null,
   newProjectDialog: Mock = vi.fn()
-): Record<'openProjectDialog' | 'newProjectDialog', Mock> {
+): Record<'openProjectDialog' | 'newProjectDialog' | 'openProject' | 'setPathAccess', Mock> {
   const info = { root: '/p', name: 'p', tree: [], access: noAccess }
   const api = {
     getSettings: vi.fn().mockResolvedValue({ lastProjectRoot, theme: 'system' }),
@@ -109,4 +109,42 @@ it('New Project from the menu does not switch when the flush fails', async () =>
   expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
   expect(api.newProjectDialog).not.toHaveBeenCalled()
   expect(screen.getByTestId('tree-panel')).toBeInTheDocument()
+})
+
+const withCanon = (access: 'edit' | 'read'): typeof noAccess => ({
+  ...noAccess,
+  settings: { version: 1 as const, prose: [], access: { canon: access } }
+})
+
+const canonTree = [{ name: 'canon', relPath: 'canon', kind: 'folder' as const, children: [] }]
+
+it('clicking a badge saves the next access', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: canonTree,
+    access: withCanon('edit')
+  })
+  api.setPathAccess.mockResolvedValue(withCanon('read'))
+  render(<App />)
+  const row = (await screen.findByText('canon')).closest('.cb-row')!
+  expect(row.querySelector('.cb-badge')).toHaveTextContent('✎')
+  fireEvent.click(row.querySelector('.cb-badge')!)
+  await waitFor(() => expect(row.querySelector('.cb-badge')).toHaveTextContent('👁'))
+  expect(api.setPathAccess).toHaveBeenCalledWith('/p', 'canon', 'read')
+})
+
+it('warns when project settings are unreadable', async () => {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: [],
+    access: { ...noAccess, unreadable: true }
+  })
+  render(<App />)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    "Couldn't read .canonball/project.json. AI access is read-only until it's fixed."
+  )
 })

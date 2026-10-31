@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectInfo, TreeNode } from '../../shared/types'
+import type { ProjectAccess, ProjectInfo, TreeNode } from '../../shared/types'
 import ChatPlaceholder from './chat/ChatPlaceholder'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
+import { nextAccess } from '../../shared/access'
 import { FileTree } from './tree/FileTree'
 import { sortTree } from './tree/sortTree'
 import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
+
+const UNREADABLE = "Couldn't read .canonball/project.json. AI access is read-only until it's fixed."
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -20,7 +23,11 @@ function App(): React.JSX.Element {
   const [pending, setPending] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [refreshed, setRefreshed] = useState<{ root: string; tree: TreeNode[] } | null>(null)
+  const [accessState, setAccessState] = useState<{ root: string; access: ProjectAccess } | null>(
+    null
+  )
   const switching = useRef(false)
+  const saving = useRef(false)
 
   /**
    * Open or create a project. Everything typed so far is saved first; if that
@@ -43,6 +50,7 @@ function App(): React.JSX.Element {
         if (info) {
           setSelectedPath(null)
           setRefreshed(null)
+          setAccessState(null)
           setProject(info)
         }
       } catch (e) {
@@ -96,13 +104,35 @@ function App(): React.JSX.Element {
         .catch(() => {
           // keep the last known tree
         })
+      window.canonball
+        .getProjectAccess()
+        .then((access) => {
+          if (!saving.current) setAccessState({ root, access })
+        })
+        .catch(() => {
+          // keep the last known access
+        })
     }
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
   }, [root])
 
   const tree = refreshed && refreshed.root === project?.root ? refreshed.tree : project?.tree
+  const access = accessState && accessState.root === root ? accessState.access : project?.access
   const sorted = useMemo(() => sortTree(tree ?? []), [tree])
+
+  const cycle = (relPath: string): void => {
+    if (!project || !access || saving.current) return
+    saving.current = true
+    const at = project.root
+    window.canonball
+      .setPathAccess(at, relPath, nextAccess(access.settings, relPath))
+      .then((next) => setAccessState({ root: at, access: next }))
+      .catch((e) => setError(message(e)))
+      .finally(() => {
+        saving.current = false
+      })
+  }
 
   if (!ready) return <div className="app" />
 
@@ -130,7 +160,18 @@ function App(): React.JSX.Element {
             {error}
           </p>
         )}
-        <FileTree tree={sorted} selected={selectedPath} onOpen={setSelectedPath} />
+        {access?.unreadable && (
+          <p role="alert" className="cb-app-error">
+            {UNREADABLE}
+          </p>
+        )}
+        <FileTree
+          tree={sorted}
+          selected={selectedPath}
+          onOpen={setSelectedPath}
+          settings={(access ?? project.access).settings}
+          onCycle={cycle}
+        />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />
         </footer>

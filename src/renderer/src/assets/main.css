@@ -47,10 +47,40 @@ body {
   color: var(--active-text);
 }
 
-.cb-badge-slot {
-  display: inline-block;
-  width: 1.5em;
+.cb-badge {
   flex: none;
+  min-width: 1.5em;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cb-badge-inherited {
+  color: var(--text-muted);
+}
+
+.cb-row-selected .cb-badge {
+  color: inherit;
+}
+
+.cb-prose-tag {
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.cb-legend {
+  margin: 0;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .cb-tree-footer {
