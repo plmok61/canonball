@@ -6,7 +6,7 @@ import { sortTree } from './sortTree'
 interface Props {
   tree: TreeNode[]
   initial: string[]
-  onDone(prose: string[]): void
+  onDone(protectedPaths: string[]): void
   /** When given, a Cancel button (and Escape) closes the dialog without saving. */
   onCancel?(): void
   /** Disables Done while a save is in flight. */
@@ -30,7 +30,7 @@ function folderRows(nodes: TreeNode[], depth: number, out: Row[]): Row[] {
   return out
 }
 
-export function ProseDialog({
+export function ProtectDialog({
   tree,
   initial,
   onDone,
@@ -87,7 +87,7 @@ export function ProseDialog({
         className="cb-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="cb-prose-title"
+        aria-labelledby="cb-protect-title"
         onKeyDown={(e) => {
           if (e.key === 'Escape' && onCancel) onCancel()
           if (e.key === 'Tab') {
@@ -106,8 +106,11 @@ export function ProseDialog({
           }
         }}
       >
-        <h2 id="cb-prose-title">Which folders hold your prose?</h2>
-        <p>The AI can read prose to answer questions, but it will never edit it.</p>
+        <h2 id="cb-protect-title">Which folders should the AI never edit?</h2>
+        <p>
+          Usually your drafts or chapters. The AI can still read them to answer questions. You can
+          change this later by right-clicking a folder.
+        </p>
         <div className="cb-dialog-list">
           <ul>{folders.map((r, i) => item(r, i === 0))}</ul>
           {files.length > 0 && (

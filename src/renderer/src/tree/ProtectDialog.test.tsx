@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { TreeNode } from '../../../shared/types'
-import { ProseDialog } from './ProseDialog'
+import { ProtectDialog } from './ProtectDialog'
 
 afterEach(cleanup)
 
@@ -26,9 +26,8 @@ const tree: TreeNode[] = [
 ]
 
 it('lists folders at every depth and top-level files', () => {
-  render(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} />)
+  render(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} />)
   expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true')
-  expect(screen.getByText('Which folders hold your prose?')).toBeInTheDocument()
   expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeInTheDocument()
   expect(screen.getByRole('checkbox', { name: 'chapters' })).toBeInTheDocument()
   expect(screen.getByRole('checkbox', { name: 'book' })).toBeInTheDocument()
@@ -37,7 +36,7 @@ it('lists folders at every depth and top-level files', () => {
 
 it('Done returns the ticked paths', () => {
   const onDone = vi.fn()
-  render(<ProseDialog tree={tree} initial={['drafts']} onDone={onDone} />)
+  render(<ProtectDialog tree={tree} initial={['drafts']} onDone={onDone} />)
   fireEvent.click(screen.getByRole('checkbox', { name: 'manuscript' }))
   fireEvent.click(screen.getByRole('checkbox', { name: 'drafts' }))
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -46,26 +45,39 @@ it('Done returns the ticked paths', () => {
 
 it('offers Cancel and Escape only when onCancel is given', () => {
   const onCancel = vi.fn()
-  const { rerender } = render(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} />)
+  const { rerender } = render(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} />)
   expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   expect(onCancel).not.toHaveBeenCalled()
-  rerender(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} onCancel={onCancel} />)
+  rerender(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} onCancel={onCancel} />)
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onCancel).toHaveBeenCalledTimes(2)
 })
 
-it("keeps prose entries the dialog doesn't list", () => {
+it("keeps protected entries the dialog doesn't list", () => {
   const onDone = vi.fn()
-  render(<ProseDialog tree={tree} initial={['drafts', 'drafts/ch1.md', 'gone']} onDone={onDone} />)
+  render(
+    <ProtectDialog tree={tree} initial={['drafts', 'drafts/ch1.md', 'gone']} onDone={onDone} />
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(onDone).toHaveBeenCalledWith(['drafts', 'drafts/ch1.md', 'gone'])
 })
 
 it('shows an error inside the dialog', () => {
-  const { rerender } = render(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} />)
+  const { rerender } = render(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} />)
   expect(screen.queryByRole('alert')).toBeNull()
-  rerender(<ProseDialog tree={tree} initial={[]} onDone={vi.fn()} error="disk full" />)
+  rerender(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} error="disk full" />)
   expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('disk full')
+})
+
+it('asks which folders the AI should never edit', () => {
+  render(<ProtectDialog tree={tree} initial={[]} onDone={vi.fn()} />)
+  expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
+    'Which folders should the AI never edit?'
+  )
+  expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'cb-protect-title')
+  expect(screen.getByText(/^Usually your drafts/).textContent).toBe(
+    'Usually your drafts or chapters. The AI can still read them to answer questions. You can change this later by right-clicking a folder.'
+  )
 })

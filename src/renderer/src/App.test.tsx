@@ -221,7 +221,7 @@ it("shows the new project's protection after a switch", async () => {
     root: '/p',
     name: 'p',
     tree: canonTree,
-    protection: withCanon(false)
+    protection: { ...withCanon(false), needsProtectPrompt: true }
   })
   api.setProtectedPaths.mockResolvedValue(withCanon(true))
   api.openProjectDialog.mockResolvedValue({
@@ -231,8 +231,7 @@ it("shows the new project's protection after a switch", async () => {
     protection: withCanon(false)
   })
   render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
-  fireEvent.click(screen.getByRole('checkbox', { name: 'canon' }))
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'canon' }))
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', ['canon']))
   await waitFor(async () => expect(await canonTag()).not.toBeNull())
@@ -274,18 +273,6 @@ it('does not ask when settings exist', async () => {
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
-it('Prose folders… reopens the dialog', async () => {
-  const api = stub('/p')
-  const protection = { ...noProtection, settings: { version: 2, protected: ['drafts'] } }
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, protection })
-  render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
-  expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeChecked()
-  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(api.setProtectedPaths).not.toHaveBeenCalled()
-})
-
 it('keeps the dialog open and shows the error inside it when saving protected folders fails', async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
@@ -310,31 +297,24 @@ it('keeps the dialog open and shows the error inside it when saving protected fo
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
-it('hides Prose folders… when settings are unreadable', async () => {
+it('has no Prose folders button', async () => {
+  stub('/p')
+  render(<App />)
+  await screen.findByTestId('tree-panel')
+  expect(screen.queryByRole('button', { name: /prose folders/i })).toBeNull()
+})
+
+it('does not ask when settings are unreadable', async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
     root: '/p',
     name: 'p',
     tree: [],
-    protection: { ...noProtection, unreadable: true }
+    protection: { ...noProtection, unreadable: true, needsProtectPrompt: true }
   })
   render(<App />)
   await screen.findByTestId('tree-panel')
-  expect(screen.queryByRole('button', { name: 'Prose folders…' })).toBeNull()
-})
-
-it("doesn't write when the protected list is unchanged, even with unlisted entries", async () => {
-  const api = stub('/p')
-  const protection = {
-    ...noProtection,
-    settings: { version: 2, protected: ['drafts', 'drafts/ch1.md'] }
-  }
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, protection })
-  render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(api.setProtectedPaths).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
 
 it('an accepted change refreshes the tree and reloads the open file', async () => {
