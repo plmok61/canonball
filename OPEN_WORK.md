@@ -7,7 +7,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 ## Build phases
 
-- [ ] **Phase 5: AI file tools & proposals.** Tools, Accept/Reject cards, style rules (plan to write)
 - [ ] **Phase 6: Brainstorm sessions.** (plan to write)
 - [ ] **Phase 7: Package & release.** Mac build, README, license (plan to write)
 
@@ -15,7 +14,7 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 - Markdown: `@tiptap/markdown` 3.32.2 with custom raw-atom nodes for HTML comments, raw HTML and footnotes; the text escaper overrides a private `encodeTextForMarkdown` — pin `@tiptap/*` exactly before upgrading.
 - Known round-trip residuals: CRLF files come back with mixed line endings; inline HTML inside bold/italic splits the emphasis; first save normalizes syntax (e.g. `_em_` → `*em*`).
-- `writeDoc` has no expected-mtime precondition: external changes are only detected on window focus. Add one before Phase 5 lets the AI write files.
+- `writeDoc` has no expected-mtime precondition: external changes are only detected on window focus. AI writes are covered by Phase 5's content check on Accept, but the writer's own autosave can still overwrite an accepted AI edit (see Phase 5 below). Add the precondition.
 - Dev environment: `~/.npm` has root-owned files (fix with `sudo chown -R 501:20 ~/.npm`); the Electron binary may need `npx install-electron` after install.
 - Phase 2 (writing aids):
   - harper.js is pinned at 2.13.0 and runs in an Electron `utilityProcess` (`src/main/grammar/`), linting paragraph text with `language: 'plaintext'`.
@@ -39,7 +38,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - Phase 4 (AI connection & chat):
   - Adapters live in `src/main/ai/`: `openaiCompat.ts` (OpenAI and the local server), `anthropic.ts`, `google.ts`, picked by `providers.ts` `adapterFor`. They share `http.ts` (`send`), `sse.ts` (`parseSse`) and `errors.ts` (`ProviderError` copy). They use plain `fetch` from main with no SDKs. Phase 5 adds tool calling per adapter.
   - `aiConfig.resolve(provider)` (`src/main/ai/aiConfig.ts`) is the only place a key is read for a request. Keys are encrypted with `safeStorage` in `<userData>/secrets.json` (`secrets.ts`), and the renderer only sees booleans.
-  - `CHAT_INSTRUCTIONS` (`src/main/ai/instructions.ts`) is the whole system prompt today. Phase 5 adds `style_rules.md`, `names_to_avoid.md`, `memory/` and the tool instructions there.
   - Chats are saved in `.canonball/chats/<uuid>.json` (`src/main/chats.ts`) with a `*` `.gitignore`. Unreadable chat files are skipped and never overwritten.
   - Known gaps:
     - Switching projects or closing the window mid-reply stops the stream and loses the partial reply. The writer's message is already saved.
@@ -51,9 +49,22 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
     - Connection-check results in Settings can arrive out of order.
     - Settings can stack over the prose dialog.
     - The chat log's live region is noisy for screen readers while streaming, and messages have no speaker labels.
-    - `ChatPanel.tsx` is ~430 lines; split it before Phase 5 grows it.
     - A corrupt `secrets.json` is read as empty, so the next save drops the other keys.
-    - There are no IPC handler tests for the new channels.
+    - There are no IPC handler tests for the new channels (Phase 5's `applyProposal`/`rejectProposal` included).
+- Phase 5 (AI file tools & proposals):
+  - Tools are in `src/main/ai/tools.ts` (`FILE_TOOLS`, `createToolRunner`). Errors go back to the model as tool results starting with `Error: `. The loop in `chatService.ts` stops after 10 tool rounds (`MAX_TOOL_ROUNDS`).
+  - Proposals live in main memory (`src/main/ai/proposals.ts`, `createProposalStore`), keyed by UUID and project root, and are cleared on project switch. Accept re-reads the file through `aiAccess`, refuses if it no longer equals `before`, and writes through `aiAccess.write`/`create`. Cards and statuses are saved on the assistant message in the chat file.
+  - The system prompt is built per request by `buildInstructions` (`src/main/ai/instructions.ts`) from the base text, tool or fallback rules, and top-level `memory/*.md` (20,000 characters each). **Phase 6's brainstorm stance goes here.**
+  - Fallback (`src/main/ai/fallback.ts`): used when a tools request fails with 400/404/422/501 and a body mentioning tool/function; the `provider:model` pair is remembered for the app session, with no notice. Readable files are packed up to 24,000 characters (memory excluded, since it's already in the instructions; prose last). Edits use `<canonball-edit path>`/`<canonball-create path>` tags, which are filtered from the streamed text.
+  - Google: tools with no parameters are sent without a `parameters` field (Gemini can reject an empty `properties` object). Not yet checked against the live API.
+  - Known gaps:
+    - The writer typing in the file while an Accept is running can autosave over the AI edit while the card says Accepted (`writeDoc` has no precondition).
+    - `rejectsTools` matches broadly: an OpenAI context-length 400 mentions "functions", so it can put a model in fallback for the session.
+    - Switching chat threads during an Accept leaves that thread's saved card `pending`; a later Accept says "no longer available" though the edit landed.
+    - A `reloadToken` bump that arrives before the editor finishes loading is dropped until the next window focus.
+    - OpenAI-compatible tool-call deltas without an `index` (some local servers) collapse into one call.
+    - Fallback tag parsing accepts double-quoted `path` only; the packer reads files it then skips for size.
+    - A failed card with no error text (hand-edited chat file) shows an empty alert.
 
 ## Decide later (after using the app)
 
