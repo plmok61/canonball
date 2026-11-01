@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  CLOUD_PROVIDERS,
-  PROVIDER_LABEL,
   chatTitle,
-  isProviderId,
   type AiStatus,
   type ChatEvent,
   type ChatMessage,
   type ChatSummary,
   type ChatThread,
-  type ModelChoice,
-  type ModelList,
-  type ProviderId
+  type ModelList
 } from '../../../shared/ai'
-import { renderChatMarkdown } from './chatMarkdown'
+import { ChatComposer } from './ChatComposer'
+import { ChatHeader } from './ChatHeader'
+import { hasConnection, message, parseChoice, type View } from './chatPanelState'
+import { ChatLog } from './ChatLog'
 import './chat.css'
 
 interface Props {
@@ -23,35 +21,9 @@ interface Props {
   onOpenSettings(): void
 }
 
-const PROVIDER_ORDER: ProviderId[] = [...CLOUD_PROVIDERS, 'local']
-const NO_CONNECTION = 'Add an AI connection in Settings to start chatting.'
 const NO_REPLY = 'No reply came back. Try again or pick another model.'
 /** A Stop click this soon after Send is the second half of a double-click, not a request to stop. */
 const STOP_GRACE_MS = 300
-
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
-
-const choiceValue = (c: ModelChoice): string => `${c.provider}:${c.model}`
-
-function parseChoice(value: string): ModelChoice | null {
-  const i = value.indexOf(':')
-  if (i < 0) return null
-  const provider = value.slice(0, i)
-  const model = value.slice(i + 1)
-  return isProviderId(provider) && model !== '' ? { provider, model } : null
-}
-
-function hasConnection(s: AiStatus): boolean {
-  return s.localUrl !== null || CLOUD_PROVIDERS.some((p) => s.keys[p])
-}
-
-/** A brand-new thread lives only in memory until its first message is saved. */
-interface View {
-  thread: ChatThread | null
-  saved: boolean
-}
 
 export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX.Element {
   const [status, setStatus] = useState<AiStatus | null>(null)
@@ -68,7 +40,6 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
   const activeRef = useRef<string | null>(null)
   const saveChain = useRef<Promise<void>>(Promise.resolve())
   const loadToken = useRef(0)
-  const logRef = useRef<HTMLDivElement>(null)
   const sentAt = useRef(0)
 
   const commit = (next: View): void => {
@@ -202,11 +173,6 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     }
   }, [aiVersion])
 
-  useEffect(() => {
-    const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [view.thread])
-
   const messages = view.thread?.messages ?? []
 
   const chosen = status?.model ?? null
@@ -290,136 +256,40 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
   }
 
   const connected = status ? hasConnection(status) : true
-  const listed = models?.models ?? []
-  const chosenListed = chosen
-    ? listed.some((m) => m.provider === chosen.provider && m.model === chosen.model)
-    : false
-  const groups = PROVIDER_ORDER.map((p) => {
-    const options = listed
-      .filter((m) => m.provider === p)
-      .map((m) => ({ value: choiceValue(m), label: m.label }))
-    if (chosen && !chosenListed && chosen.provider === p) {
-      options.push({ value: choiceValue(chosen), label: chosen.model })
-    }
-    return { provider: p, options }
-  }).filter((g) => g.options.length > 0)
 
   const threadValue = view.saved && view.thread ? view.thread.id : ''
 
   return (
     <div className="cb-chat">
-      <header className="cb-chat-header">
-        <div className="cb-chat-pickers">
-          <select
-            aria-label="Model"
-            value={chosen ? choiceValue(chosen) : ''}
-            disabled={status === null}
-            onChange={(e) => chooseModel(e.target.value)}
-          >
-            {!chosen && (
-              <option value="" disabled>
-                Choose a model
-              </option>
-            )}
-            {groups.map((g) => (
-              <optgroup key={g.provider} label={PROVIDER_LABEL[g.provider]}>
-                {g.options.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <select
-            aria-label="Chat"
-            value={threadValue}
-            disabled={busy}
-            onChange={(e) => chooseThread(e.target.value)}
-          >
-            {summaries.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-            <option value="">New chat</option>
-          </select>
-        </div>
-        <button
-          type="button"
-          className="cb-chat-gear"
-          aria-label="AI settings"
-          title="AI settings"
-          onClick={onOpenSettings}
-        >
-          ⚙
-        </button>
-      </header>
-      {models && models.errors.length > 0 && (
-        <ul className="cb-chat-model-errors">
-          {models.errors.map((e) => (
-            <li key={e.provider}>
-              {PROVIDER_LABEL[e.provider]}: {e.message}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="cb-chat-log" role="log" ref={logRef}>
-        {!connected && (
-          <div className="cb-chat-empty">
-            <p>{NO_CONNECTION}</p>
-            <button type="button" onClick={onOpenSettings}>
-              Open Settings
-            </button>
-          </div>
-        )}
-        {messages.map((m, i) =>
-          m.role === 'user' ? (
-            <div key={i} className="cb-chat-msg cb-chat-user">
-              {m.content}
-            </div>
-          ) : (
-            <div key={i} className="cb-chat-msg cb-chat-reply">
-              {m.content === '' && busy && i === messages.length - 1 ? (
-                <span className="cb-chat-waiting">…</span>
-              ) : (
-                renderChatMarkdown(m.content)
-              )}
-            </div>
-          )
-        )}
-      </div>
+      <ChatHeader
+        status={status}
+        models={models}
+        summaries={summaries}
+        threadValue={threadValue}
+        busy={busy}
+        onChooseModel={chooseModel}
+        onChooseThread={chooseThread}
+        onOpenSettings={onOpenSettings}
+      />
+      <ChatLog
+        messages={messages}
+        busy={busy}
+        connected={connected}
+        onOpenSettings={onOpenSettings}
+      />
       {error && (
         <p role="alert" className="cb-chat-error">
           {error}
         </p>
       )}
-      <div className="cb-chat-composer">
-        <textarea
-          aria-label="Message"
-          rows={3}
-          value={input}
-          // Read-only, not disabled, while a reply streams, so the writer keeps focus.
-          readOnly={busy}
-          aria-busy={busy}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              send()
-            }
-          }}
-        />
-        {busy ? (
-          <button key="stop" type="button" onClick={stop}>
-            Stop
-          </button>
-        ) : (
-          <button key="send" type="button" disabled={!canSend} onClick={send}>
-            Send
-          </button>
-        )}
-      </div>
+      <ChatComposer
+        input={input}
+        busy={busy}
+        canSend={canSend}
+        onInput={setInput}
+        onSend={send}
+        onStop={stop}
+      />
     </div>
   )
 }
