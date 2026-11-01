@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectInfo, ProjectProtection, TreeNode } from '../../shared/types'
+import type { Move, ProjectInfo, ProjectProtection, TreeNode } from '../../shared/types'
 import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
@@ -7,6 +7,7 @@ import { isProtected } from '../../shared/protection'
 import type { TreeMenuItem } from '../../shared/treeMenuItems'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
+import type { Selection } from './tree/selection'
 import { ProtectDialog } from './tree/ProtectDialog'
 import { sortTree } from './tree/sortTree'
 import { ThemePicker } from './theme/ThemePicker'
@@ -14,6 +15,11 @@ import { useTheme } from './theme/useTheme'
 
 const UNREADABLE =
   "Couldn't read .canonball/project.json. The AI can't change any files until it's fixed."
+
+const noop = (): void => {}
+const noEditSubmit = async (): Promise<string | null> => null
+const NO_PATHS: string[] = []
+const NO_MOVES: Move[] = []
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -26,6 +32,7 @@ function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [selection, setSelection] = useState<Selection>({ paths: [], anchor: null })
   const [refreshed, setRefreshed] = useState<{ root: string; tree: TreeNode[] } | null>(null)
   const [protectionState, setProtectionState] = useState<{
     root: string
@@ -253,10 +260,26 @@ function App(): React.JSX.Element {
         )}
         <FileTree
           tree={sorted}
-          selected={selectedPath}
-          onOpen={setSelectedPath}
+          selection={selection}
+          onSelect={(next, open) => {
+            setSelection(open ? { paths: [open], anchor: open } : next)
+            if (open) setSelectedPath(open)
+          }}
           protectedPaths={(protection ?? project.protection).settings.protected}
-          onRowMenu={(p, inProtected) => void onRowMenu(p, inProtected)}
+          onMenu={({ relPath, inProtectedRoot }) => {
+            // Only protect/unprotect for now; the other actions arrive later.
+            if (relPath === null) return
+            if (inProtectedRoot) void onRowMenu(relPath, true)
+            else if (!isProtected((protection ?? project.protection).settings, relPath))
+              void onRowMenu(relPath, false)
+          }}
+          onKey={noop}
+          onFocusChange={noop}
+          cutPaths={NO_PATHS}
+          editing={null}
+          onEditSubmit={noEditSubmit}
+          onEditCancel={noop}
+          moves={NO_MOVES}
         />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />
