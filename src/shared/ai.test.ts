@@ -6,6 +6,7 @@ import {
   parseChatRequest,
   parseChatThread,
   parseModelChoice,
+  sessionTitle,
   turnsForModel
 } from './ai'
 import type { Proposal } from './proposals'
@@ -161,5 +162,46 @@ describe('proposals in threads', () => {
       { role: 'assistant', content: 'Done\n\n[Suggested an edit to notes/ideas.md: accepted]' },
       { role: 'assistant', content: 'Plain' }
     ])
+  })
+})
+
+describe('sessions', () => {
+  const req = {
+    requestId: 'req-1',
+    model: { provider: 'anthropic', model: 'claude-x' },
+    messages: [{ role: 'user', content: 'hi' }]
+  }
+
+  it('parseChatThread keeps a valid session and rejects a bad one', () => {
+    expect(parseChatThread(thread())).not.toHaveProperty('session')
+    expect(parseChatThread(thread({ session: { goal: 'Ship' } }))?.session).toEqual({
+      goal: 'Ship'
+    })
+    const ended = { goal: 'Ship', endedAt: '2026-10-31T11:00:00.000Z' }
+    expect(parseChatThread(thread({ session: ended }))?.session).toEqual(ended)
+    expect(parseChatThread(thread({ session: { goal: '' } }))).toBeNull()
+    expect(parseChatThread(thread({ session: { goal: 3 } }))).toBeNull()
+    expect(parseChatThread(thread({ session: { goal: 'x', endedAt: 5 } }))).toBeNull()
+    expect(parseChatThread(thread({ session: 'x' }))).toBeNull()
+  })
+
+  it('parseChatRequest validates the session field', () => {
+    const brainstorm = { goal: 'Ship', phase: 'brainstorm' }
+    const end = { goal: 'Ship', phase: 'end' }
+    expect(parseChatRequest({ ...req, session: brainstorm })?.session).toEqual(brainstorm)
+    expect(parseChatRequest({ ...req, session: end })?.session).toEqual(end)
+    expect(parseChatRequest({ ...req, session: { goal: 'Ship', phase: 'later' } })).toBeNull()
+    expect(parseChatRequest({ ...req, session: { goal: '  ', phase: 'end' } })).toBeNull()
+    expect(
+      parseChatRequest({ ...req, session: { goal: 'x'.repeat(2001), phase: 'end' } })
+    ).toBeNull()
+    expect(parseChatRequest(req)).not.toHaveProperty('session')
+  })
+
+  it('sessionTitle prefixes and truncates', () => {
+    expect(sessionTitle('the ship')).toBe('Brainstorm: the ship')
+    const t = sessionTitle('x'.repeat(100))
+    expect(t).toHaveLength(60)
+    expect(t.endsWith('…')).toBe(true)
   })
 })

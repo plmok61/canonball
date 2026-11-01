@@ -38,6 +38,14 @@ export interface ChatMessage extends ChatTurn {
   model?: ModelChoice
   proposals?: Proposal[]
 }
+export interface ChatSession {
+  goal: string
+  endedAt?: string
+}
+export interface SessionRequest {
+  goal: string
+  phase: 'brainstorm' | 'end'
+}
 export interface ChatThread {
   version: 1
   id: string
@@ -45,6 +53,7 @@ export interface ChatThread {
   createdAt: string
   updatedAt: string
   messages: ChatMessage[]
+  session?: ChatSession
 }
 export interface ChatSummary {
   id: string
@@ -55,6 +64,7 @@ export interface ChatRequest {
   requestId: string
   model: ModelChoice
   messages: ChatTurn[]
+  session?: SessionRequest
 }
 export type ChatEvent =
   | { requestId: string; kind: 'delta'; text: string }
@@ -67,6 +77,9 @@ export const CHAT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const PROVIDER_IDS: readonly string[] = [...CLOUD_PROVIDERS, 'local']
 const TITLE_MAX = 60
 const REQUEST_ID_MAX = 200
+
+export const SESSION_GOAL_MAX = 2000
+export const END_SESSION_MESSAGE = 'End the session and write the log.'
 
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x)
@@ -101,6 +114,10 @@ export function chatTitle(firstUserMessage: string): string {
   if (t === '') return 'New chat'
   const chars = Array.from(t)
   return chars.length > TITLE_MAX ? chars.slice(0, TITLE_MAX - 1).join('') + '…' : t
+}
+
+export function sessionTitle(goal: string): string {
+  return chatTitle('Brainstorm: ' + goal)
 }
 
 export function mergeTurns(turns: ChatTurn[]): ChatTurn[] {
@@ -166,7 +183,7 @@ export function parseChatThread(x: unknown): ChatThread | null {
     }
     messages.push(msg)
   }
-  return {
+  const thread: ChatThread = {
     version: 1,
     id: x.id,
     title: x.title,
@@ -174,6 +191,14 @@ export function parseChatThread(x: unknown): ChatThread | null {
     updatedAt: x.updatedAt,
     messages
   }
+  if (x.session !== undefined) {
+    const s = x.session
+    if (!isRecord(s) || typeof s.goal !== 'string' || s.goal === '') return null
+    if (s.endedAt !== undefined && typeof s.endedAt !== 'string') return null
+    thread.session = { goal: s.goal }
+    if (s.endedAt !== undefined) thread.session.endedAt = s.endedAt
+  }
+  return thread
 }
 
 export function parseChatRequest(x: unknown): ChatRequest | null {
@@ -189,5 +214,14 @@ export function parseChatRequest(x: unknown): ChatRequest | null {
   const messages = parseTurns(x.messages)
   if (!messages || messages.length === 0) return null
   if (messages[messages.length - 1].role !== 'user') return null
-  return { requestId: x.requestId, model, messages }
+  const request: ChatRequest = { requestId: x.requestId, model, messages }
+  if (x.session !== undefined) {
+    const s = x.session
+    if (!isRecord(s) || typeof s.goal !== 'string') return null
+    const goal = s.goal.trim()
+    if (goal === '' || goal.length > SESSION_GOAL_MAX) return null
+    if (s.phase !== 'brainstorm' && s.phase !== 'end') return null
+    request.session = { goal, phase: s.phase }
+  }
+  return request
 }
