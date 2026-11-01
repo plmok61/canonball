@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import App from './App'
 import { flushAll } from './editor/saveRegistry'
@@ -11,7 +20,7 @@ vi.mock('./editor/saveRegistry', async (importOriginal) => ({
   flushAll: vi.fn()
 }))
 
-type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
+import type { MenuCommand } from '../../shared/types'
 let menu: ((cmd: MenuCommand) => void) | null = null
 
 const noProtection = {
@@ -36,6 +45,8 @@ function stub(
   | 'pasteEntries'
   | 'duplicateEntries'
   | 'moveExact'
+  | 'nativeUndo'
+  | 'nativeRedo'
   | 'trashEntries'
   | 'restoreEntries'
   | 'removeCreated'
@@ -79,6 +90,8 @@ function stub(
     pasteEntries: vi.fn(),
     duplicateEntries: vi.fn(),
     moveExact: vi.fn(),
+    nativeUndo: vi.fn(),
+    nativeRedo: vi.fn(),
     trashEntries: vi.fn(),
     restoreEntries: vi.fn(),
     removeCreated: vi.fn(),
@@ -730,7 +743,7 @@ it('Cmd+Z in the tree undoes the rename', async () => {
   await openA()
   await renameAToB(api)
   await waitFor(() => expect(treeBox()).toHaveFocus())
-  key('z', { metaKey: true })
+  act(() => menu!('undo'))
   await waitFor(() =>
     expect(api.moveExact).toHaveBeenCalledWith('/p', [{ from: 'notes/b.md', to: 'notes/a.md' }])
   )
@@ -745,7 +758,7 @@ it('undo failure shows the error line', async () => {
   render(<App />)
   await renameAToB(api)
   focusTree()
-  key('z', { metaKey: true })
+  act(() => menu!('undo'))
   expect(await screen.findByRole('alert')).toHaveTextContent('Can\'t undo: "a.md" already exists')
 })
 
@@ -830,7 +843,7 @@ it('undoing a new file with text in it asks first', async () => {
   api.readDoc.mockResolvedValue({ content: 'Some words\n', mtimeMs: 2 })
   api.confirmDialog.mockResolvedValue(false)
   await waitFor(() => expect(treeBox()).toHaveFocus())
-  key('z', { metaKey: true })
+  act(() => menu!('undo'))
   await waitFor(() =>
     expect(api.confirmDialog).toHaveBeenCalledWith({
       message: 'Undo New File? "ch" has text in it. It will go to the Trash.',
@@ -865,7 +878,7 @@ it('protecting from the menu with no change pushes nothing to undo', async () =>
   await rightClick('Project', 'canon')
   await waitFor(() => expect(api.changeProtectionMany).toHaveBeenCalled())
   focusTree()
-  key('z', { metaKey: true })
+  act(() => menu!('undo'))
   await act(async () => {})
   expect(api.applyProtectionDelta).not.toHaveBeenCalled()
 })
@@ -917,7 +930,7 @@ it('a cut pasted back into its own folder keeps the clipboard', async () => {
   await waitFor(() => expect(api.pasteEntries).toHaveBeenCalledTimes(2))
   expect(screen.getByRole('button', { name: 'a' }).closest('.cb-row')).toHaveClass('cb-row-cut')
   focusTree()
-  key('z', { metaKey: true })
+  act(() => menu!('undo'))
   await act(async () => {})
   expect(api.moveExact).not.toHaveBeenCalled()
 })
@@ -935,4 +948,44 @@ it('a folder selected with its own child protects the folder only', async () => 
   expect(api.showTreeMenu).toHaveBeenCalledWith(
     menuFor({ kind: 'multi', protectRule: 'protect', canPaste: false })
   )
+})
+
+it('the undo menu command with the editor focused uses native undo, not file undo', async () => {
+  const api = actionProject()
+  api.moveExact.mockResolvedValue({ tree: actionTree, protection: draftsProtected })
+  render(<App />)
+  await openA()
+  await renameAToB(api)
+  const input = within(screen.getByTestId('chat-panel')).getByLabelText('Message')
+  act(() => input.focus())
+  act(() => menu!('undo'))
+  await act(async () => {})
+  expect(api.nativeUndo).toHaveBeenCalledTimes(1)
+  expect(api.moveExact).not.toHaveBeenCalled()
+  act(() => menu!('redo'))
+  expect(api.nativeRedo).toHaveBeenCalledTimes(1)
+})
+
+it('the undo menu command with the tree focused and nothing to undo does nothing', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  focusTree()
+  act(() => menu!('undo'))
+  act(() => menu!('redo'))
+  await act(async () => {})
+  expect(api.nativeUndo).not.toHaveBeenCalled()
+  expect(api.nativeRedo).not.toHaveBeenCalled()
+  expect(api.moveExact).not.toHaveBeenCalled()
+})
+
+it('Cmd+Z in the tree is left for the menu accelerator', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  focusTree()
+  const ev = createEvent.keyDown(treeBox(), { key: 'z', metaKey: true })
+  fireEvent(treeBox(), ev)
+  expect(ev.defaultPrevented).toBe(false)
+  expect(api.moveExact).not.toHaveBeenCalled()
 })

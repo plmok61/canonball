@@ -479,10 +479,6 @@ export function useFileActions({
         e.preventDefault()
         void trash(targets)
         break
-      case 'z':
-        e.preventDefault()
-        void (e.shiftKey ? redo() : undo())
-        break
     }
   }
 

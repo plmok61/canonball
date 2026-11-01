@@ -78,6 +78,9 @@ function App(): React.JSX.Element {
     []
   )
 
+  // Set below, once the file actions exist; the menu listener stays subscribed.
+  const historyCommand = useRef<(command: 'undo' | 'redo') => void>(() => {})
+
   useEffect(
     () =>
       window.canonball.onMenuCommand((command) => {
@@ -90,6 +93,10 @@ function App(): React.JSX.Element {
             break
           case 'new-project':
             void switchProject(() => window.canonball.newProjectDialog())
+            break
+          case 'undo':
+          case 'redo':
+            historyCommand.current(command)
             break
         }
       }),
@@ -193,6 +200,14 @@ function App(): React.JSX.Element {
     },
     setError,
     savingRef: saving
+  })
+
+  useEffect(() => {
+    historyCommand.current = (command) => {
+      if (actions.treeFocused) void actions[command]()
+      else if (command === 'undo') window.canonball.nativeUndo()
+      else window.canonball.nativeRedo()
+    }
   })
 
   const settingsDialog = settingsOpen ? (

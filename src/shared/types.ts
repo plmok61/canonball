@@ -38,7 +38,7 @@ export interface AppSettings {
 
 export type TreeMenuKind = 'protect' | 'unprotect'
 
-export type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
+export type MenuCommand = 'open-project' | 'new-project' | 'open-settings' | 'undo' | 'redo'
 
 /** The renderer's reply to a flush request before the window closes. */
 export interface FlushResult {
