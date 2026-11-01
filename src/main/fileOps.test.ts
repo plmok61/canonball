@@ -183,6 +183,92 @@ describe('moveExact', () => {
   })
 })
 
+describe('undo of a move that folds protection', () => {
+  it('a protected file moved into a protected folder is protected again after undo', async () => {
+    await put('notes/a.md', 'A')
+    await fs.mkdir(at('drafts'))
+    await protect(['drafts', 'notes/a.md'])
+    const out = await pasteEntries(root, 'move', ['notes/a.md'], 'drafts')
+    expect(out.moves).toEqual([{ from: 'notes/a.md', to: 'drafts/a.md' }])
+    expect(out.folded).toEqual(['notes/a.md'])
+    expect(await protectedNow()).toEqual(['drafts'])
+    const back = await moveExact(
+      root,
+      out.moves.map((m) => ({ from: m.to, to: m.from })),
+      out.folded
+    )
+    expect(await fs.readFile(at('notes/a.md'), 'utf8')).toBe('A')
+    expect(await protectedNow()).toEqual(['drafts', 'notes/a.md'])
+    expect(back.protection.settings.protected).toEqual(['drafts', 'notes/a.md'])
+    // Redo folds it again through the normal remap.
+    const redo = await moveExact(root, out.moves)
+    expect(redo.folded).toEqual(['notes/a.md'])
+    expect(await protectedNow()).toEqual(['drafts'])
+  })
+
+  it('a folder holding a nested protected entry gets it back after undo', async () => {
+    await put('book/ch/one.md', '1')
+    await put('book/two.md', '2')
+    await fs.mkdir(at('drafts'))
+    await protect(['drafts', 'book/ch'])
+    const out = await pasteEntries(root, 'move', ['book'], 'drafts')
+    expect(out.folded).toEqual(['book/ch'])
+    expect(await protectedNow()).toEqual(['drafts'])
+    await moveExact(root, [{ from: 'drafts/book', to: 'book' }], out.folded)
+    expect(await fs.readFile(at('book/ch/one.md'), 'utf8')).toBe('1')
+    expect(await protectedNow()).toEqual(['drafts', 'book/ch'])
+  })
+
+  it('restored protection is in place before the item moves back', async () => {
+    await put('notes/a.md', 'A')
+    await fs.mkdir(at('drafts'))
+    await protect(['drafts', 'notes/a.md'])
+    const out = await pasteEntries(root, 'move', ['notes/a.md'], 'drafts')
+    const seen: string[][] = []
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (from === at('drafts/a.md')) {
+        seen.push(JSON.parse(fsSync.readFileSync(at(SETTINGS_REL), 'utf8')).protected)
+      }
+      return realRename(from, to)
+    })
+    await moveExact(root, [{ from: 'drafts/a.md', to: 'notes/a.md' }], out.folded)
+    expect(seen).toEqual([expect.arrayContaining(['drafts', 'notes/a.md'])])
+  })
+
+  it('rename reports what it folded', async () => {
+    await put('notes/a.md', 'A')
+    // `x` is protected though nothing is there yet.
+    await protect(['x', 'notes/a.md'])
+    const out = await renameEntry(root, 'notes', 'x')
+    expect(out.folded).toEqual(['notes/a.md'])
+    expect(await protectedNow()).toEqual(['x'])
+    await moveExact(root, [{ from: 'x', to: 'notes' }], out.folded)
+    // The `x` entry follows the folder back, so it covers `notes/a.md` again.
+    expect(await protectedNow()).toEqual(['notes'])
+  })
+
+  it('refuses restore entries outside the paths the items return to', async () => {
+    await put('drafts/a.md', 'A')
+    await fs.mkdir(at('notes'))
+    await protect(['drafts'])
+    await expect(
+      moveExact(root, [{ from: 'drafts/a.md', to: 'notes/a.md' }], ['other.md'])
+    ).rejects.toThrow('Invalid path')
+    await expect(
+      moveExact(root, [{ from: 'drafts/a.md', to: 'notes/a.md' }], ['notes/.x'])
+    ).rejects.toThrow('Invalid path')
+    expect(await exists('drafts/a.md')).toBe(true)
+    expect(await protectedNow()).toEqual(['drafts'])
+  })
+
+  it('writes nothing when there is nothing to restore', async () => {
+    await put('a.md', 'A')
+    await moveExact(root, [{ from: 'a.md', to: 'b.md' }], [])
+    expect(await exists(SETTINGS_REL)).toBe(false)
+  })
+})
+
 describe('trash and restore', () => {
   it('trash keeps the item in the holding area and drops protection', async () => {
     await put('drafts/ch.md', 'text')

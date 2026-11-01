@@ -108,15 +108,20 @@ export interface CanonballApi {
     root: string,
     relPath: string,
     newName: string
-  ): Promise<FileOpResult & { move: Move }>
+  ): Promise<FileOpResult & { move: Move; folded: string[] }>
   pasteEntries(
     root: string,
     mode: 'copy' | 'move',
     relPaths: string[],
     destRel: string
-  ): Promise<FileOpResult & { created: string[]; moves: Move[] }>
+  ): Promise<FileOpResult & { created: string[]; moves: Move[]; folded: string[] }>
   duplicateEntries(root: string, relPaths: string[]): Promise<FileOpResult & { created: string[] }>
-  moveExact(root: string, moves: Move[]): Promise<FileOpResult>
+  /** `restoreProtected`: entries an undone move folded away, put back before it moves. */
+  moveExact(
+    root: string,
+    moves: Move[],
+    restoreProtected?: string[]
+  ): Promise<FileOpResult & { folded: string[] }>
   trashEntries(root: string, relPaths: string[]): Promise<FileOpResult & { trashed: TrashedItem[] }>
   restoreEntries(root: string, items: TrashedItem[]): Promise<FileOpResult>
   removeCreated(

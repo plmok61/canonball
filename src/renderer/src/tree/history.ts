@@ -10,7 +10,8 @@ import type {
 
 export type Step =
   | { kind: 'create'; label: string; created: string[] }
-  | { kind: 'move'; label: string; moves: Move[] }
+  /** `folded`: protected entries the move folded away, put back on undo. */
+  | { kind: 'move'; label: string; moves: Move[]; folded?: string[] }
   | { kind: 'trash'; label: string; items: TrashedItem[] }
   | { kind: 'protect'; label: string; delta: ProtectionDelta }
   /** An undone create, held on the redo stack. Internal. */
@@ -55,7 +56,10 @@ export function createHistory(
       }
       case 'move': {
         const moves = step.moves.map((m) => ({ from: m.to, to: m.from })).reverse()
-        return [await api.moveExact(root, moves), step]
+        const r = step.folded?.length
+          ? await api.moveExact(root, moves, step.folded)
+          : await api.moveExact(root, moves)
+        return [r, step]
       }
       case 'trash':
         return [await api.restoreEntries(root, step.items), step]
@@ -78,8 +82,11 @@ export function createHistory(
         const r = await api.restoreEntries(root, step.items)
         return [r, { kind: 'create', label: step.label, created: step.items.map((i) => i.from) }]
       }
-      case 'move':
-        return [await api.moveExact(root, step.moves), step]
+      case 'move': {
+        // Redo folds again through the normal remap; keep what it folded this time.
+        const r = await api.moveExact(root, step.moves)
+        return [r, { ...step, folded: r.folded ?? [] }]
+      }
       case 'trash': {
         const r = await api.trashEntries(
           root,

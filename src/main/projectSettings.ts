@@ -114,18 +114,21 @@ function validMoves(moves: Move[]): boolean {
 /**
  * Keeps protection in step with a move. `'before'` adds each remapped entry
  * alongside the old one, so the item is protected at both paths while it
- * moves; `'after'` leaves only the remapped list.
+ * moves; `'after'` leaves only the remapped list. `restore` (only with
+ * `'before'`) adds entries at the paths the items are moving to, in the same
+ * write, so an undone move gets back the entries the original move folded away.
  */
 export async function remapProtection(
   root: string,
   moves: Move[],
-  phase: 'before' | 'after'
+  phase: 'before' | 'after',
+  restore: string[] = []
 ): Promise<ProjectProtection> {
-  if (!validMoves(moves)) throw new Error('Invalid path')
+  if (!validMoves(moves) || !restore.every(validPath)) throw new Error('Invalid path')
   return serialized(root, async () => {
     const out = await updateProtected(root, (current) =>
       phase === 'before'
-        ? normalizeProtected([...current, ...remapProtected(current, moves)])
+        ? normalizeProtected([...current, ...remapProtected(current, moves), ...restore])
         : remapProtected(current, moves)
     )
     return out.protection

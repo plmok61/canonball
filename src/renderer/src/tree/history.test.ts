@@ -38,6 +38,34 @@ describe('history', () => {
     expect(api.moveExact).toHaveBeenLastCalledWith('/root', [{ from: 'a.md', to: 'b.md' }])
   })
 
+  it('undo of a move restores the protection it folded; redo keeps the new fold', async () => {
+    const { h, api } = setup()
+    const step: Step = {
+      kind: 'move',
+      label: 'Move',
+      moves: [{ from: 'notes/a.md', to: 'drafts/a.md' }],
+      folded: ['notes/a.md']
+    }
+    h.push(step)
+    await h.undo()
+    expect(api.moveExact).toHaveBeenCalledWith(
+      '/root',
+      [{ from: 'drafts/a.md', to: 'notes/a.md' }],
+      ['notes/a.md']
+    )
+    api.moveExact.mockResolvedValueOnce({ ...ok, folded: ['notes/a.md'] })
+    await h.redo()
+    expect(api.moveExact).toHaveBeenLastCalledWith('/root', [
+      { from: 'notes/a.md', to: 'drafts/a.md' }
+    ])
+    await h.undo()
+    expect(api.moveExact).toHaveBeenLastCalledWith(
+      '/root',
+      [{ from: 'drafts/a.md', to: 'notes/a.md' }],
+      ['notes/a.md']
+    )
+  })
+
   it('reverses multiple moves in reverse order', async () => {
     const { h, api } = setup()
     h.push({

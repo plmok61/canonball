@@ -241,7 +241,7 @@ export function useFileActions({
         if (r.moves.length === 0) return
         // Cut items leave the clipboard after one paste.
         if (fromClip) setClipState(null)
-        push({ kind: 'move', label, moves: r.moves })
+        push({ kind: 'move', label, moves: r.moves, folded: r.folded })
         follow(r.moves)
       } else if (r.created.length) {
         push({ kind: 'create', label, created: r.created })
@@ -549,7 +549,7 @@ export function useFileActions({
         if (!live(at)) return null
         apply(r)
         if (r.move.from !== r.move.to) {
-          push({ kind: 'move', label: 'Rename', moves: [r.move] })
+          push({ kind: 'move', label: 'Rename', moves: [r.move], folded: r.folded })
           follow([r.move])
         }
       } else {

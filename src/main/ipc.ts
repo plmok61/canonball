@@ -292,11 +292,17 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
     if (!isStringArray(relPaths)) throw new Error('Invalid argument')
     return duplicateEntries(r, relPaths)
   })
-  ipcMain.handle('canonball:moveExact', (_e, root: unknown, moves: unknown) => {
-    const r = rootArg(root)
-    if (!Array.isArray(moves) || !moves.every(isMove)) throw new Error('Invalid argument')
-    return moveExact(r, moves)
-  })
+  ipcMain.handle(
+    'canonball:moveExact',
+    (_e, root: unknown, moves: unknown, restoreProtected: unknown) => {
+      const r = rootArg(root)
+      if (!Array.isArray(moves) || !moves.every(isMove)) throw new Error('Invalid argument')
+      if (restoreProtected !== undefined && !isStringArray(restoreProtected)) {
+        throw new Error('Invalid argument')
+      }
+      return moveExact(r, moves, restoreProtected ?? [])
+    }
+  )
   ipcMain.handle('canonball:trashEntries', (_e, root: unknown, relPaths: unknown) => {
     const r = rootArg(root)
     if (!isStringArray(relPaths)) throw new Error('Invalid argument')

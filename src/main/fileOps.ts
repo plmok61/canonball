@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { promises as fsp } from 'fs'
 import path from 'path'
-import { copyName, isAtOrUnder, nameError, topmost, withMd } from '../shared/fileNames'
+import { copyName, isAtOrUnder, nameError, remapPath, topmost, withMd } from '../shared/fileNames'
 import { remapProtected, validPath } from '../shared/protection'
 import type { EntryKind, FileOpResult, Move, TrashedItem } from '../shared/types'
 import { listTree, resolveInside } from './projectFs'
@@ -101,15 +101,34 @@ async function moveOne(root: string, m: Move): Promise<void> {
 }
 
 /**
- * Moves with protection kept in step: entries are added at the new paths
- * before anything moves, and the old ones dropped after, so nothing is ever
- * unprotected mid-move. On a failure, completed moves keep their protection
- * and entries added for moves that didn't happen are dropped.
+ * Protected entries a move folds away: moved entries (at or under a `from`)
+ * whose new path normalize drops because a protected entry already covers
+ * it. Reported as they were, at their old paths, so an undo can put them back.
  */
-async function movesWithProtection(root: string, moves: Move[]): Promise<void> {
-  if (moves.length === 0) return
+function foldedBy(pre: string[], moves: Move[]): string[] {
+  const after = remapProtected(pre, moves)
+  return pre.filter(
+    (p) =>
+      moves.some((m) => isAtOrUnder(p, m.from)) &&
+      !after.includes(moves.reduce((acc, m) => remapPath(acc, m), p))
+  )
+}
+
+/**
+ * Moves with protection kept in step: entries are added at the new paths
+ * (plus any `restore` entries) before anything moves, and the old ones
+ * dropped after, so nothing is ever unprotected mid-move. On a failure,
+ * completed moves keep their protection and entries added for moves that
+ * didn't happen are dropped. Returns the entries the move folded away.
+ */
+async function movesWithProtection(
+  root: string,
+  moves: Move[],
+  restore: string[] = []
+): Promise<string[]> {
+  if (moves.length === 0) return []
   const pre = (await loadProjectProtection(root)).settings.protected
-  await remapProtection(root, moves, 'before')
+  await remapProtection(root, moves, 'before', restore)
   const done: Move[] = []
   try {
     for (const m of moves) {
@@ -120,7 +139,10 @@ async function movesWithProtection(root: string, moves: Move[]): Promise<void> {
     try {
       await remapProtection(root, done, 'after')
       const undone = moves.filter((m) => !done.includes(m))
-      const stale = remapProtected(pre, undone).filter((p) => !pre.includes(p))
+      const stale = [
+        ...remapProtected(pre, undone),
+        ...restore.filter((p) => undone.some((m) => isAtOrUnder(p, m.to)))
+      ].filter((p) => !pre.includes(p))
       if (stale.length > 0) await applyProtectionDelta(root, { added: [], removed: stale })
     } catch {
       // Leaving an extra protected entry is the safe failure.
@@ -128,6 +150,7 @@ async function movesWithProtection(root: string, moves: Move[]): Promise<void> {
     throw err
   }
   await remapProtection(root, moves, 'after')
+  return foldedBy(pre, moves)
 }
 
 async function result<T extends object>(root: string, extra: T): Promise<FileOpResult & T> {
@@ -162,18 +185,19 @@ export async function renameEntry(
   root: string,
   relPath: string,
   newName: string
-): Promise<FileOpResult & { move: Move }> {
+): Promise<FileOpResult & { move: Move; folded: string[] }> {
   const full = checkedPath(root, relPath)
   checkedName(newName)
   const kind = await kindOf(full, relPath)
   const to = join(parentOf(relPath), kind === 'file' ? withMd(newName) : newName)
   checkedPath(root, to)
   const move = { from: relPath, to }
+  let folded: string[] = []
   if (to !== relPath) {
     if (await takenBy(full, resolveInside(root, to))) throw alreadyExists(to)
-    await movesWithProtection(root, [move])
+    folded = await movesWithProtection(root, [move])
   }
-  return result(root, { move })
+  return result(root, { move, folded })
 }
 
 export async function pasteEntries(
@@ -181,7 +205,7 @@ export async function pasteEntries(
   mode: 'copy' | 'move',
   relPaths: string[],
   destRel: string
-): Promise<FileOpResult & { created: string[]; moves: Move[] }> {
+): Promise<FileOpResult & { created: string[]; moves: Move[]; folded: string[] }> {
   const destFull = checkedFolder(root, destRel)
   if (!(await fsp.stat(destFull)).isDirectory()) throw new Error('Not a folder')
   const items: { rel: string; kind: EntryKind }[] = []
@@ -201,15 +225,15 @@ export async function pasteEntries(
     plan.push({ from: rel, to: join(destRel, name) })
   }
   if (mode === 'move') {
-    await movesWithProtection(root, plan)
-    return result(root, { created: [], moves: plan })
+    const folded = await movesWithProtection(root, plan)
+    return result(root, { created: [], moves: plan, folded })
   }
   const created: string[] = []
   for (const m of plan) {
     await copyOne(root, m)
     created.push(m.to)
   }
-  return result(root, { created, moves: [] })
+  return result(root, { created, moves: [], folded: [] })
 }
 
 async function copyOne(root: string, m: Move): Promise<void> {
@@ -237,8 +261,16 @@ export async function duplicateEntries(
   return result(root, { created })
 }
 
-/** Moves exactly as given, refusing before anything moves if a target is taken. Undo and redo use it. */
-export async function moveExact(root: string, moves: Move[]): Promise<FileOpResult> {
+/**
+ * Moves exactly as given, refusing before anything moves if a target is taken.
+ * Undo and redo use it. `restoreProtected` (from an undo) puts back entries the
+ * original move folded away; each must lie at or under a path an item moves to.
+ */
+export async function moveExact(
+  root: string,
+  moves: Move[],
+  restoreProtected: string[] = []
+): Promise<FileOpResult & { folded: string[] }> {
   const targets = new Set<string>()
   for (const m of moves) {
     const from = checkedPath(root, m.from)
@@ -248,11 +280,16 @@ export async function moveExact(root: string, moves: Move[]): Promise<FileOpResu
     if (targets.has(m.to.toLowerCase()) || (await takenBy(from, to))) throw alreadyExists(m.to)
     targets.add(m.to.toLowerCase())
   }
-  await movesWithProtection(
+  for (const p of restoreProtected) {
+    checkedPath(root, p)
+    if (!moves.some((m) => isAtOrUnder(p, m.to))) throw new Error('Invalid path')
+  }
+  const folded = await movesWithProtection(
     root,
-    moves.filter((m) => m.from !== m.to)
+    moves.filter((m) => m.from !== m.to),
+    restoreProtected
   )
-  return result(root, {})
+  return result(root, { folded })
 }
 
 /** Moves each item into `.canonball/trash/<id>/<name>` and drops its protected entries. */

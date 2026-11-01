@@ -47,7 +47,8 @@ const api: CanonballApi = {
   pasteEntries: (root, mode, relPaths, destRel) =>
     invoke('canonball:pasteEntries', root, mode, relPaths, destRel),
   duplicateEntries: (root, relPaths) => invoke('canonball:duplicateEntries', root, relPaths),
-  moveExact: (root, moves) => invoke('canonball:moveExact', root, moves),
+  moveExact: (root, moves, restoreProtected) =>
+    invoke('canonball:moveExact', root, moves, restoreProtected),
   trashEntries: (root, relPaths) => invoke('canonball:trashEntries', root, relPaths),
   restoreEntries: (root, items) => invoke('canonball:restoreEntries', root, items),
   removeCreated: (root, relPaths) => invoke('canonball:removeCreated', root, relPaths),
