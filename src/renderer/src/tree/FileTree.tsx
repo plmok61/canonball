@@ -30,7 +30,11 @@ interface Props {
   onEditCancel(): void
   /** Moves from the latest action; collapse state follows them. */
   moves: Move[]
+  /** Folders to show open; a new array (from the latest action) opens them. */
+  expand?: string[]
 }
+
+const NO_EXPAND: string[] = []
 
 /** Everything the rows share. */
 interface Ctx {
@@ -103,7 +107,7 @@ function Rows({
         if (n.kind === 'folder') {
           const open = ctx.isOpen(n.relPath, depth)
           return (
-            <div key={n.relPath} role="treeitem" aria-expanded={open}>
+            <div key={n.relPath} role="treeitem" aria-expanded={open} data-path={n.relPath}>
               <div
                 className={rowClass(n.relPath)}
                 style={rowStyle(depth)}
@@ -133,7 +137,12 @@ function Rows({
           )
         }
         return (
-          <div key={n.relPath} role="treeitem" aria-selected={ctx.selected.has(n.relPath)}>
+          <div
+            key={n.relPath}
+            role="treeitem"
+            aria-selected={ctx.selected.has(n.relPath)}
+            data-path={n.relPath}
+          >
             <div
               className={rowClass(n.relPath)}
               style={rowStyle(depth)}
@@ -188,7 +197,8 @@ export function FileTree({
   editing,
   onEditSubmit,
   onEditCancel,
-  moves
+  moves,
+  expand = NO_EXPAND
 }: Props): React.JSX.Element {
   // Holds toggled folders: for top-level means "collapsed", for nested means "expanded".
   const [toggled, setToggled] = useState<Set<string>>(new Set())
@@ -200,13 +210,32 @@ export function FileTree({
       setToggled((prev) => new Set([...prev].map((p) => moves.reduce(remapPath, p))))
     }
   }
+  const { protectedRoots, rest } = splitTree(tree, protectedPaths)
+  const [seenExpand, setSeenExpand] = useState<string[]>(expand)
+  if (expand !== seenExpand) {
+    setSeenExpand(expand)
+    if (expand.length > 0) {
+      // Top-level rows are open unless toggled; nested ones are open only when toggled.
+      const top = new Set([
+        ...protectedRoots.map((r) => r.node.relPath),
+        ...rest.map((n) => n.relPath)
+      ])
+      setToggled((prev) => {
+        const next = new Set(prev)
+        for (const p of expand) {
+          if (top.has(p)) next.delete(p)
+          else next.add(p)
+        }
+        return next
+      })
+    }
+  }
   const toggle = (relPath: string): void =>
     setToggled((prev) => {
       const next = new Set(prev)
       if (!next.delete(relPath)) next.add(relPath)
       return next
     })
-  const { protectedRoots, rest } = splitTree(tree, protectedPaths)
   // A folder getting a new entry is shown open.
   const forced = new Set(
     editing?.mode === 'new' && editing.parentRel !== '' ? withAncestors(editing.parentRel) : []

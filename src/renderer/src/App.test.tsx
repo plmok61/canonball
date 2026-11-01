@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import '@testing-library/jest-dom/vitest'
 import App from './App'
 import { flushAll } from './editor/saveRegistry'
+import { menuFor } from '../../shared/treeMenuItems'
 
 vi.mock('./editor/saveRegistry', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./editor/saveRegistry')>()),
@@ -29,7 +30,19 @@ function stub(
   | 'getProjectProtection'
   | 'setProtectedPaths'
   | 'changeProtectionMany'
-  | 'showTreeMenu',
+  | 'showTreeMenu'
+  | 'createEntry'
+  | 'renameEntry'
+  | 'pasteEntries'
+  | 'duplicateEntries'
+  | 'moveExact'
+  | 'trashEntries'
+  | 'restoreEntries'
+  | 'removeCreated'
+  | 'applyProtectionDelta'
+  | 'revealEntry'
+  | 'confirmDialog'
+  | 'refreshTree',
   Mock
 > {
   const info = { root: '/p', name: 'p', tree: [], protection: noProtection }
@@ -59,7 +72,18 @@ function stub(
     changeProtectionMany: vi
       .fn()
       .mockResolvedValue({ protection: noProtection, delta: { added: [], removed: [] } }),
-    showTreeMenu: vi.fn().mockImplementation(async (items: string[]) => items[0]),
+    showTreeMenu: vi.fn().mockResolvedValue(null),
+    confirmDialog: vi.fn().mockResolvedValue(true),
+    createEntry: vi.fn(),
+    renameEntry: vi.fn(),
+    pasteEntries: vi.fn(),
+    duplicateEntries: vi.fn(),
+    moveExact: vi.fn(),
+    trashEntries: vi.fn(),
+    restoreEntries: vi.fn(),
+    removeCreated: vi.fn(),
+    applyProtectionDelta: vi.fn(),
+    revealEntry: vi.fn().mockResolvedValue(undefined),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
       return () => {
@@ -432,22 +456,28 @@ const rightClick = async (region: 'Protected' | 'Project', name: string): Promis
 
 it('right-click protect saves', async () => {
   const api = menuProject()
+  api.showTreeMenu.mockResolvedValue('protect')
   render(<App />)
   await rightClick('Project', 'notes')
   await waitFor(() =>
     expect(api.changeProtectionMany).toHaveBeenCalledWith('/p', 'protect', ['notes'])
   )
-  expect(api.showTreeMenu).toHaveBeenCalledWith(['protect'])
+  expect(api.showTreeMenu).toHaveBeenCalledWith(
+    menuFor({ kind: 'folder', protectRule: 'protect', canPaste: false })
+  )
 })
 
 it('stop protecting saves', async () => {
   const api = menuProject()
+  api.showTreeMenu.mockResolvedValue('unprotect')
   render(<App />)
   await rightClick('Protected', 'drafts')
   await waitFor(() =>
     expect(api.changeProtectionMany).toHaveBeenCalledWith('/p', 'unprotect', ['drafts'])
   )
-  expect(api.showTreeMenu).toHaveBeenCalledWith(['unprotect'])
+  expect(api.showTreeMenu).toHaveBeenCalledWith(
+    menuFor({ kind: 'folder', protectRule: 'unprotect', canPaste: false })
+  )
 })
 
 it('no menu while the settings file is unreadable', async () => {
@@ -476,6 +506,7 @@ it('a dismissed menu writes nothing', async () => {
 
 it('a second action during a save is ignored', async () => {
   const api = menuProject()
+  api.showTreeMenu.mockResolvedValue('protect')
   const d = deferred<{
     protection: typeof draftsProtected
     delta: { added: string[]; removed: string[] }
@@ -495,6 +526,7 @@ it('a second action during a save is ignored', async () => {
 
 it('a failed save shows the app error and leaves the sections unchanged', async () => {
   const api = menuProject()
+  api.showTreeMenu.mockResolvedValue('protect')
   api.changeProtectionMany.mockRejectedValue(new Error('disk full'))
   render(<App />)
   await rightClick('Project', 'notes')
@@ -506,6 +538,7 @@ it('a failed save shows the app error and leaves the sections unchanged', async 
 
 it("protecting the open file's folder updates the banner", async () => {
   const api = menuProject()
+  api.showTreeMenu.mockResolvedValue('protect')
   api.changeProtectionMany.mockResolvedValue({
     protection: { ...noProtection, settings: { version: 2, protected: ['notes'] } },
     delta: { added: ['notes'], removed: [] }
@@ -527,4 +560,312 @@ it("protecting the open file's folder updates the banner", async () => {
   await rightClick('Project', 'notes')
   expect(await screen.findByText("Protected — AI won't edit")).toBeInTheDocument()
   expect((api as unknown as Record<string, Mock>).writeDoc).not.toHaveBeenCalled()
+})
+
+// ---- File actions ----
+
+type Node = { name: string; relPath: string; kind: 'file' | 'folder'; children?: Node[] }
+const file = (relPath: string): Node => ({
+  name: relPath.split('/').pop()!,
+  relPath,
+  kind: 'file'
+})
+const folder = (relPath: string, children: Node[] = []): Node => ({
+  name: relPath.split('/').pop()!,
+  relPath,
+  kind: 'folder',
+  children
+})
+const actionTree = [folder('canon'), folder('drafts'), folder('notes', [file('notes/a.md')])]
+const renamedTree = [folder('canon'), folder('drafts'), folder('notes', [file('notes/b.md')])]
+
+/** A project with the editor's dependencies stubbed, so files can be opened. */
+function actionProject(): ReturnType<typeof stub> & Record<'readDoc' | 'writeDoc', Mock> {
+  Range.prototype.getBoundingClientRect = () => new DOMRect()
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: [][Symbol.iterator]
+    }) as unknown as DOMRectList
+  document.elementFromPoint = () => null
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: actionTree,
+    protection: draftsProtected
+  })
+  const more = {
+    readDoc: vi.fn().mockResolvedValue({ content: '', mtimeMs: 1 }),
+    writeDoc: vi.fn(),
+    onFlushRequest: vi.fn(),
+    lintGrammar: vi.fn(async (texts: string[]) => texts.map(() => []))
+  }
+  Object.assign(api, more)
+  return api as ReturnType<typeof stub> & Record<'readDoc' | 'writeDoc', Mock>
+}
+
+const treeBox = (): HTMLElement => screen.getByRole('group', { name: 'Files' })
+const focusTree = (): void => act(() => treeBox().focus())
+const key = (k: string, mods: { metaKey?: boolean; shiftKey?: boolean } = {}): void => {
+  fireEvent.keyDown(treeBox(), { key: k, ...mods })
+}
+const pathLabel = (): HTMLElement | null =>
+  within(screen.getByTestId('editor-panel')).queryByText(/^notes\//)
+
+async function openA(): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: 'a' }))
+  await waitFor(() => expect(pathLabel()).toHaveTextContent('notes/a.md'))
+}
+
+async function renameAToB(api: ReturnType<typeof actionProject>): Promise<void> {
+  api.renameEntry.mockResolvedValue({
+    tree: renamedTree,
+    protection: draftsProtected,
+    move: { from: 'notes/a.md', to: 'notes/b.md' }
+  })
+  api.showTreeMenu.mockResolvedValueOnce('rename')
+  await rightClick('Project', 'a')
+  const box = await screen.findByRole('textbox', { name: 'Name' })
+  fireEvent.change(box, { target: { value: 'b' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(api.renameEntry).toHaveBeenCalledWith('/p', 'notes/a.md', 'b'))
+  await screen.findByRole('button', { name: 'b' })
+}
+
+it('rename the open file keeps it open at the new path', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  await renameAToB(api)
+  await waitFor(() => expect(pathLabel()).toHaveTextContent('notes/b.md'))
+  expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+})
+
+it('renaming a folder that holds the open file saves first', async () => {
+  const api = actionProject()
+  api.renameEntry.mockResolvedValue({
+    tree: [folder('canon'), folder('drafts'), folder('ideas', [file('ideas/a.md')])],
+    protection: draftsProtected,
+    move: { from: 'notes', to: 'ideas' }
+  })
+  render(<App />)
+  await openA()
+  vi.mocked(flushAll).mockClear()
+  api.showTreeMenu.mockResolvedValueOnce('rename')
+  await rightClick('Project', 'notes')
+  const box = await screen.findByRole('textbox', { name: 'Name' })
+  fireEvent.change(box, { target: { value: 'ideas' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(api.renameEntry).toHaveBeenCalledWith('/p', 'notes', 'ideas'))
+  expect(flushAll).toHaveBeenCalled()
+  expect(vi.mocked(flushAll).mock.invocationCallOrder[0]).toBeLessThan(
+    api.renameEntry.mock.invocationCallOrder[0]
+  )
+  await waitFor(() =>
+    expect(within(screen.getByTestId('editor-panel')).getByText('ideas/a.md')).toBeInTheDocument()
+  )
+})
+
+it('trash asks first', async () => {
+  const api = actionProject()
+  api.confirmDialog.mockResolvedValue(false)
+  api.showTreeMenu.mockResolvedValueOnce('trash')
+  render(<App />)
+  await rightClick('Project', 'a')
+  await waitFor(() =>
+    expect(api.confirmDialog).toHaveBeenCalledWith({
+      message: 'Move "a" to the Trash?',
+      ok: 'Move to Trash'
+    })
+  )
+  await act(async () => {})
+  expect(api.trashEntries).not.toHaveBeenCalled()
+})
+
+it('trashing a folder says it includes everything, and closes the open file inside it', async () => {
+  const api = actionProject()
+  api.trashEntries.mockResolvedValue({
+    tree: [folder('canon'), folder('drafts')],
+    protection: draftsProtected,
+    trashed: [{ id: 't1', from: 'notes', protectedEntries: [] }]
+  })
+  render(<App />)
+  await openA()
+  api.showTreeMenu.mockResolvedValueOnce('trash')
+  await rightClick('Project', 'notes')
+  await waitFor(() => expect(api.trashEntries).toHaveBeenCalledWith('/p', ['notes']))
+  expect(api.confirmDialog).toHaveBeenCalledWith({
+    message: 'Move "notes" to the Trash?',
+    detail: 'This includes everything in it.',
+    ok: 'Move to Trash'
+  })
+  expect(await screen.findByText('Choose a file from the project')).toBeInTheDocument()
+})
+
+it('copy then paste into a folder', async () => {
+  const api = actionProject()
+  api.pasteEntries.mockResolvedValue({
+    tree: actionTree,
+    protection: draftsProtected,
+    created: ['canon/a.md'],
+    moves: []
+  })
+  render(<App />)
+  await openA()
+  focusTree()
+  key('c', { metaKey: true })
+  fireEvent.click(screen.getByRole('button', { name: 'canon' }))
+  key('v', { metaKey: true })
+  await waitFor(() =>
+    expect(api.pasteEntries).toHaveBeenCalledWith('/p', 'copy', ['notes/a.md'], 'canon')
+  )
+})
+
+it('Cmd+Z in the tree undoes the rename', async () => {
+  const api = actionProject()
+  api.moveExact.mockResolvedValue({ tree: actionTree, protection: draftsProtected })
+  render(<App />)
+  await openA()
+  await renameAToB(api)
+  await waitFor(() => expect(treeBox()).toHaveFocus())
+  key('z', { metaKey: true })
+  await waitFor(() =>
+    expect(api.moveExact).toHaveBeenCalledWith('/p', [{ from: 'notes/b.md', to: 'notes/a.md' }])
+  )
+  await waitFor(() => expect(pathLabel()).toHaveTextContent('notes/a.md'))
+})
+
+it('undo failure shows the error line', async () => {
+  const api = actionProject()
+  api.moveExact.mockRejectedValue(
+    new Error('Error invoking remote method \'file:moveExact\': Error: "a.md" already exists')
+  )
+  render(<App />)
+  await renameAToB(api)
+  focusTree()
+  key('z', { metaKey: true })
+  expect(await screen.findByRole('alert')).toHaveTextContent('Can\'t undo: "a.md" already exists')
+})
+
+it('keys do nothing when the tree is not focused', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  focusTree()
+  const input = within(screen.getByTestId('chat-panel')).getByLabelText('Message')
+  act(() => input.focus())
+  fireEvent.keyDown(input, { key: 'Backspace', metaKey: true })
+  key('Backspace', { metaKey: true })
+  await act(async () => {})
+  expect(api.confirmDialog).not.toHaveBeenCalled()
+  expect(api.trashEntries).not.toHaveBeenCalled()
+})
+
+it('switching projects clears the clipboard', async () => {
+  const api = actionProject()
+  api.openProjectDialog.mockResolvedValue({
+    root: '/q',
+    name: 'q',
+    tree: [folder('canon')],
+    protection: noProtection
+  })
+  render(<App />)
+  await openA()
+  focusTree()
+  key('c', { metaKey: true })
+  act(() => menu!('open-project'))
+  await waitFor(() => expect(api.openProjectDialog).toHaveBeenCalled())
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'notes' })).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'canon' }))
+  focusTree()
+  key('v', { metaKey: true })
+  await act(async () => {})
+  expect(api.pasteEntries).not.toHaveBeenCalled()
+})
+
+it('New File opens the created file', async () => {
+  const api = actionProject()
+  api.createEntry.mockResolvedValue({
+    tree: [
+      folder('canon', [file('canon/ch.md')]),
+      folder('drafts'),
+      folder('notes', [file('notes/a.md')])
+    ],
+    protection: draftsProtected,
+    relPath: 'canon/ch.md'
+  })
+  api.showTreeMenu.mockResolvedValueOnce('new-file')
+  render(<App />)
+  await rightClick('Project', 'canon')
+  const box = await screen.findByRole('textbox', { name: 'Name' })
+  fireEvent.change(box, { target: { value: 'ch' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(api.createEntry).toHaveBeenCalledWith('/p', 'file', 'canon', 'ch'))
+  await waitFor(() =>
+    expect(within(screen.getByTestId('editor-panel')).getByText('canon/ch.md')).toBeInTheDocument()
+  )
+  await waitFor(() => expect(treeBox()).toHaveFocus())
+})
+
+it('undoing a new file with text in it asks first', async () => {
+  const api = actionProject()
+  api.createEntry.mockResolvedValue({
+    tree: [
+      folder('canon', [file('canon/ch.md')]),
+      folder('drafts'),
+      folder('notes', [file('notes/a.md')])
+    ],
+    protection: draftsProtected,
+    relPath: 'canon/ch.md'
+  })
+  api.showTreeMenu.mockResolvedValueOnce('new-file')
+  render(<App />)
+  await rightClick('Project', 'canon')
+  const box = await screen.findByRole('textbox', { name: 'Name' })
+  fireEvent.change(box, { target: { value: 'ch' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(api.createEntry).toHaveBeenCalled())
+  api.readDoc.mockResolvedValue({ content: 'Some words\n', mtimeMs: 2 })
+  api.confirmDialog.mockResolvedValue(false)
+  await waitFor(() => expect(treeBox()).toHaveFocus())
+  key('z', { metaKey: true })
+  await waitFor(() =>
+    expect(api.confirmDialog).toHaveBeenCalledWith({
+      message: 'Undo New File? "ch" has text in it. It will go to the Trash.',
+      ok: 'Undo'
+    })
+  )
+  await act(async () => {})
+  expect(api.removeCreated).not.toHaveBeenCalled()
+})
+
+it('arrow keys move the selection and Return renames it', async () => {
+  const api = actionProject()
+  render(<App />)
+  await screen.findByRole('button', { name: 'a' })
+  focusTree()
+  key('ArrowDown')
+  key('ArrowDown')
+  key('ArrowDown')
+  key('ArrowDown')
+  // drafts (protected), canon, notes, then a
+  const row = screen.getByRole('button', { name: 'a' }).closest('[role="treeitem"]')
+  expect(row).toHaveAttribute('aria-selected', 'true')
+  key('Enter')
+  expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('a')
+  expect(api.renameEntry).not.toHaveBeenCalled()
+})
+
+it('protecting from the menu with no change pushes nothing to undo', async () => {
+  const api = actionProject()
+  api.showTreeMenu.mockResolvedValueOnce('protect')
+  render(<App />)
+  await rightClick('Project', 'canon')
+  await waitFor(() => expect(api.changeProtectionMany).toHaveBeenCalled())
+  focusTree()
+  key('z', { metaKey: true })
+  await act(async () => {})
+  expect(api.applyProtectionDelta).not.toHaveBeenCalled()
 })

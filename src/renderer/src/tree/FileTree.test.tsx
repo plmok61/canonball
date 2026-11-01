@@ -196,6 +196,40 @@ it('expanded folders stay expanded after a rename', () => {
   expect(screen.getByText('x')).toBeInTheDocument()
 })
 
+it('expand opens folders, nested or top-level', () => {
+  const nested: TreeNode[] = [
+    {
+      name: 'book',
+      relPath: 'book',
+      kind: 'folder',
+      children: [
+        {
+          name: 'ch',
+          relPath: 'book/ch',
+          kind: 'folder',
+          children: [{ name: 'x.md', relPath: 'book/ch/x.md', kind: 'file' }]
+        }
+      ]
+    }
+  ]
+  const { rerender } = render(<FileTree {...base} tree={nested} />)
+  expect(screen.queryByText('x')).toBeNull()
+  rerender(<FileTree {...base} tree={nested} expand={['book/ch']} />)
+  expect(screen.getByText('x')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('book'))
+  expect(screen.queryByText('ch')).toBeNull()
+  rerender(<FileTree {...base} tree={nested} expand={['book']} />)
+  expect(screen.getByText('ch')).toBeInTheDocument()
+})
+
+it('rows carry their path', () => {
+  render(<FileTree {...base} />)
+  expect(screen.getByText('characters').closest('[role="treeitem"]')).toHaveAttribute(
+    'data-path',
+    'canon/characters.md'
+  )
+})
+
 it('focusing and blurring the tree reports focus', () => {
   const onFocusChange = vi.fn()
   render(<FileTree {...base} onFocusChange={onFocusChange} />)

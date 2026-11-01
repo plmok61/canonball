@@ -1,25 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Move, ProjectInfo, ProjectProtection, TreeNode } from '../../shared/types'
+import type { ProjectInfo, ProjectProtection, TreeNode } from '../../shared/types'
 import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
 import { isProtected } from '../../shared/protection'
-import type { TreeMenuItem } from '../../shared/treeMenuItems'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import type { Selection } from './tree/selection'
 import { ProtectDialog } from './tree/ProtectDialog'
 import { sortTree } from './tree/sortTree'
+import { useFileActions } from './tree/useFileActions'
 import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
 
 const UNREADABLE =
   "Couldn't read .canonball/project.json. The AI can't change any files until it's fixed."
-
-const noop = (): void => {}
-const noEditSubmit = async (): Promise<string | null> => null
-const NO_PATHS: string[] = []
-const NO_MOVES: Move[] = []
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -182,30 +177,23 @@ function App(): React.JSX.Element {
       })
   }
 
-  const onRowMenu = async (relPath: string, inProtected: boolean): Promise<void> => {
-    if (!project || !protection || protection.unreadable || saving.current) return
-    const at = project.root
-    const kind = inProtected ? 'unprotect' : 'protect'
-    let chosen: TreeMenuItem | null
-    try {
-      chosen = await window.canonball.showTreeMenu([kind])
-    } catch (e) {
-      setError(message(e))
-      return
-    }
-    if (chosen !== 'protect' && chosen !== 'unprotect') return
-    if (saving.current) return
-    saving.current = true
-    setError(null)
-    try {
-      const saved = await window.canonball.changeProtectionMany(at, kind, [relPath])
-      setProtectionState({ root: at, protection: saved.protection })
-    } catch (e) {
-      setError(message(e))
-    } finally {
-      saving.current = false
-    }
-  }
+  const actions = useFileActions({
+    project,
+    tree: sorted,
+    protection,
+    selection,
+    setSelection,
+    selectedPath,
+    setSelectedPath,
+    setTree: (t) => {
+      if (root) setRefreshed({ root, tree: t })
+    },
+    setProtection: (p) => {
+      if (root) setProtectionState({ root, protection: p })
+    },
+    setError,
+    savingRef: saving
+  })
 
   const settingsDialog = settingsOpen ? (
     <SettingsDialog
@@ -266,20 +254,15 @@ function App(): React.JSX.Element {
             if (open) setSelectedPath(open)
           }}
           protectedPaths={(protection ?? project.protection).settings.protected}
-          onMenu={({ relPath, inProtectedRoot }) => {
-            // Only protect/unprotect for now; the other actions arrive later.
-            if (relPath === null) return
-            if (inProtectedRoot) void onRowMenu(relPath, true)
-            else if (!isProtected((protection ?? project.protection).settings, relPath))
-              void onRowMenu(relPath, false)
-          }}
-          onKey={noop}
-          onFocusChange={noop}
-          cutPaths={NO_PATHS}
-          editing={null}
-          onEditSubmit={noEditSubmit}
-          onEditCancel={noop}
-          moves={NO_MOVES}
+          onMenu={actions.onMenu}
+          onKey={actions.onKey}
+          onFocusChange={actions.onFocusChange}
+          cutPaths={actions.cutPaths}
+          editing={actions.editing}
+          onEditSubmit={actions.onEditSubmit}
+          onEditCancel={actions.onEditCancel}
+          moves={actions.moves}
+          expand={actions.expand}
         />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />
