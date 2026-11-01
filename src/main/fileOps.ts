@@ -94,7 +94,13 @@ async function moveOne(root: string, m: Move): Promise<void> {
   if (from !== to && from.toLowerCase() === to.toLowerCase()) {
     const tmp = path.join(path.dirname(from), `.${path.basename(from)}.${randomUUID()}.tmp`)
     await fsp.rename(from, tmp)
-    await fsp.rename(tmp, to)
+    try {
+      await fsp.rename(tmp, to)
+    } catch (err) {
+      // Never strand the file at a hidden name: put it back where it was.
+      await fsp.rename(tmp, from).catch(() => undefined)
+      throw err
+    }
     return
   }
   await fsp.rename(from, to)

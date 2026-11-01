@@ -101,6 +101,18 @@ describe('renameEntry', () => {
     expect(await fs.readFile(at('c.md'), 'utf8')).toBe('C')
   })
 
+  it('a case-only rename that fails at the last step puts the file back', async () => {
+    await put('drafts/ch.md', 'text')
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (String(from).endsWith('.tmp') && to === at('drafts/Ch.md')) throw new Error('EPERM: nope')
+      return realRename(from, to)
+    })
+    await expect(renameEntry(root, 'drafts/ch.md', 'Ch')).rejects.toThrow('EPERM: nope')
+    expect(await fs.readdir(at('drafts'))).toEqual(['ch.md'])
+    expect(await fs.readFile(at('drafts/ch.md'), 'utf8')).toBe('text')
+  })
+
   it('rename refuses an existing name', async () => {
     await put('drafts/a.md', 'A')
     await put('drafts/b.md', 'B')
