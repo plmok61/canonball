@@ -69,6 +69,20 @@ export interface ProjectSettings {
   access: Record<string, Access>
 }
 
+export interface ProtectionSettings {
+  version: 2
+  protected: string[]
+}
+
+export interface ProjectProtection {
+  /** Nothing protected when missing or unreadable. */
+  settings: ProtectionSettings
+  /** True only when the settings file does not exist. */
+  needsProtectPrompt: boolean
+  /** True when the file exists but failed to parse or validate. */
+  unreadable: boolean
+}
+
 export interface ProjectAccess {
   /** All-read empty settings when missing or unreadable. */
   settings: ProjectSettings
