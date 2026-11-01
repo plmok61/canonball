@@ -317,6 +317,22 @@ describe('trash and restore', () => {
     expect(out.tree).toEqual([])
   })
 
+  it('a failed put-back still tries the rest and rethrows the original error', async () => {
+    await put('a.md', 'A')
+    await put('b.md', 'B')
+    await put('c.md', 'C')
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (from === at('c.md'))
+        throw Object.assign(new Error('EPERM: c is locked'), { code: 'EPERM' })
+      if (to === at('a.md')) throw new Error('EBUSY: put-back failed')
+      return realRename(from, to)
+    })
+    await expect(trashEntries(root, ['a.md', 'b.md', 'c.md'])).rejects.toThrow('EPERM: c is locked')
+    expect(await fs.readFile(at('b.md'), 'utf8')).toBe('B')
+    expect(await fs.readFile(at('c.md'), 'utf8')).toBe('C')
+  })
+
   it('restore puts it back with protection', async () => {
     await put('drafts/ch.md', 'text')
     await protect(['drafts'])

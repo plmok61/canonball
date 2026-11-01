@@ -180,6 +180,26 @@ export function useFileActions({
     selectedPath !== null && paths.some((p) => isAtOrUnder(selectedPath, p))
 
   /**
+   * After a failed action, catch up with disk: main keeps the moves a multi-item
+   * action finished before it failed. If the open file is no longer in the tree
+   * it is closed. No flush is needed here: an action that can move the open file
+   * touches it, so `run` flushed it before the action began.
+   */
+  const resync = async (at: string): Promise<void> => {
+    const [fresh, prot] = await Promise.allSettled([api.refreshTree(), api.getProjectProtection()])
+    if (!live(at)) return
+    if (prot.status === 'fulfilled') setProtection(prot.value)
+    if (fresh.status !== 'fulfilled') return
+    setTree(fresh.value)
+    const present = (p: string): boolean => findNode(fresh.value, p) !== null
+    setSelectedPath((prev) => (prev !== null && !present(prev) ? null : prev))
+    setSelection((prev) => ({
+      paths: prev.paths.filter(present),
+      anchor: prev.anchor !== null && !present(prev.anchor) ? null : prev.anchor
+    }))
+  }
+
+  /**
    * One main-process action at a time. The open file's pending save is flushed first
    * when the action touches it; if that fails nothing is changed.
    */
@@ -199,7 +219,9 @@ export function useFileActions({
       }
       await fn(at)
     } catch (e) {
-      if (live(at)) setError(message(e))
+      if (!live(at)) return
+      setError(message(e))
+      await resync(at)
     } finally {
       savingRef.current = false
     }

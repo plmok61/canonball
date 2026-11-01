@@ -315,10 +315,16 @@ export async function trashEntries(
       })
     }
   } catch (err) {
-    // Put back whatever already moved, so a failed trash changes nothing.
+    // Put back whatever already moved, so a failed trash changes nothing. A
+    // put-back that fails leaves that item safe in the holding area; the rest
+    // are still put back, and the writer sees the error that stopped the trash.
     for (const t of trashed) {
-      await fsp.rename(resolveInside(root, holdingRel(t.id, t.from)), resolveInside(root, t.from))
-      await fsp.rmdir(resolveInside(root, `${TRASH_REL}/${t.id}`)).catch(() => undefined)
+      try {
+        await fsp.rename(resolveInside(root, holdingRel(t.id, t.from)), resolveInside(root, t.from))
+        await fsp.rmdir(resolveInside(root, `${TRASH_REL}/${t.id}`)).catch(() => undefined)
+      } catch {
+        // Kept in `.canonball/trash/`; nothing is lost.
+      }
     }
     throw err
   }

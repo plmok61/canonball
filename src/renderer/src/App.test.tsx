@@ -460,6 +460,9 @@ function menuProject(): ReturnType<typeof stub> {
     tree: menuTree,
     protection: draftsProtected
   })
+  // What disk holds, for the re-sync after a failed action.
+  api.refreshTree.mockResolvedValue(menuTree)
+  api.getProjectProtection.mockResolvedValue(draftsProtected)
   return api
 }
 
@@ -715,6 +718,40 @@ it('trashing a folder says it includes everything, and closes the open file insi
     ok: 'Move to Trash'
   })
   expect(await screen.findByText('Choose a file from the project')).toBeInTheDocument()
+})
+
+it('a trash that fails partway re-syncs the tree and closes the open file if it moved', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  api.trashEntries.mockRejectedValue(new Error('EPERM: operation not permitted'))
+  // Main kept the moves it finished: `notes` is gone from disk.
+  api.refreshTree.mockResolvedValue([folder('canon'), folder('drafts')])
+  api.getProjectProtection.mockClear()
+  const refreshesBefore = api.refreshTree.mock.calls.length
+  api.showTreeMenu.mockResolvedValueOnce('trash')
+  await rightClick('Project', 'notes')
+  await waitFor(() => expect(api.trashEntries).toHaveBeenCalledWith('/p', ['notes']))
+  expect(await screen.findByText(/EPERM/)).toBeInTheDocument()
+  await waitFor(() => expect(api.refreshTree.mock.calls.length).toBeGreaterThan(refreshesBefore))
+  expect(api.getProjectProtection).toHaveBeenCalled()
+  expect(await screen.findByText('Choose a file from the project')).toBeInTheDocument()
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'notes' })).toBeNull())
+})
+
+it('a failed action whose refreshed tree still has the open file keeps it open', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  api.trashEntries.mockRejectedValue(new Error('EPERM: operation not permitted'))
+  api.refreshTree.mockResolvedValue(actionTree)
+  const refreshesBefore = api.refreshTree.mock.calls.length
+  api.showTreeMenu.mockResolvedValueOnce('trash')
+  await rightClick('Project', 'notes')
+  expect(await screen.findByText(/EPERM/)).toBeInTheDocument()
+  await waitFor(() => expect(api.refreshTree.mock.calls.length).toBeGreaterThan(refreshesBefore))
+  await act(async () => {})
+  expect(pathLabel()).toHaveTextContent('notes/a.md')
 })
 
 it('copy then paste into a folder', async () => {
