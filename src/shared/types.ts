@@ -8,6 +8,7 @@ import type {
   ModelChoice,
   ModelList
 } from './ai'
+import type { TreeMenuItem } from './treeMenuItems'
 export interface TreeNode {
   name: string
   relPath: string
@@ -90,8 +91,48 @@ export interface CanonballApi {
   getProjectProtection(): Promise<ProjectProtection>
   /** Rejects with 'Project changed' if `root` is no longer the open project. */
   setProtectedPaths(root: string, paths: string[]): Promise<ProjectProtection>
-  changeProtection(root: string, kind: TreeMenuKind, relPath: string): Promise<ProjectProtection>
-  showTreeMenu(kind: TreeMenuKind): Promise<boolean>
+  /** Pops the native tree menu; resolves the clicked item, or null if dismissed. */
+  showTreeMenu(items: (TreeMenuItem | '-')[]): Promise<TreeMenuItem | null>
+  /** Native confirm dialog; resolves true when the `ok` button is chosen. */
+  confirmDialog(opts: { message: string; detail?: string; ok: string }): Promise<boolean>
+  nativeUndo(): void
+  nativeRedo(): void
+  /** File actions. Each rejects with 'Project changed' if `root` is no longer the open project. */
+  createEntry(
+    root: string,
+    kind: EntryKind,
+    parentRel: string,
+    name: string
+  ): Promise<FileOpResult & { relPath: string }>
+  renameEntry(
+    root: string,
+    relPath: string,
+    newName: string
+  ): Promise<FileOpResult & { move: Move }>
+  pasteEntries(
+    root: string,
+    mode: 'copy' | 'move',
+    relPaths: string[],
+    destRel: string
+  ): Promise<FileOpResult & { created: string[]; moves: Move[] }>
+  duplicateEntries(root: string, relPaths: string[]): Promise<FileOpResult & { created: string[] }>
+  moveExact(root: string, moves: Move[]): Promise<FileOpResult>
+  trashEntries(root: string, relPaths: string[]): Promise<FileOpResult & { trashed: TrashedItem[] }>
+  restoreEntries(root: string, items: TrashedItem[]): Promise<FileOpResult>
+  removeCreated(
+    root: string,
+    relPaths: string[]
+  ): Promise<FileOpResult & { trashed: TrashedItem[] }>
+  changeProtectionMany(
+    root: string,
+    kind: TreeMenuKind,
+    relPaths: string[]
+  ): Promise<{ protection: ProjectProtection; delta: ProtectionDelta }>
+  applyProtectionDelta(
+    root: string,
+    delta: ProtectionDelta
+  ): Promise<{ protection: ProjectProtection; applied: ProtectionDelta }>
+  revealEntry(root: string, relPath: string): Promise<void>
   /** One array of lints per input text, in the same order. */
   lintGrammar(texts: string[]): Promise<GrammarLint[][]>
   onFlushRequest(handler: () => Promise<void>): void

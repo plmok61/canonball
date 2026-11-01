@@ -28,7 +28,7 @@ function stub(
   | 'openProject'
   | 'getProjectProtection'
   | 'setProtectedPaths'
-  | 'changeProtection'
+  | 'changeProtectionMany'
   | 'showTreeMenu',
   Mock
 > {
@@ -56,8 +56,10 @@ function stub(
     onChatEvent: vi.fn(() => () => {}),
     getProjectProtection: vi.fn().mockResolvedValue(noProtection),
     setProtectedPaths: vi.fn().mockResolvedValue(noProtection),
-    changeProtection: vi.fn().mockResolvedValue(noProtection),
-    showTreeMenu: vi.fn().mockResolvedValue(true),
+    changeProtectionMany: vi
+      .fn()
+      .mockResolvedValue({ protection: noProtection, delta: { added: [], removed: [] } }),
+    showTreeMenu: vi.fn().mockImplementation(async (items: string[]) => items[0]),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
       return () => {
@@ -432,8 +434,10 @@ it('right-click protect saves', async () => {
   const api = menuProject()
   render(<App />)
   await rightClick('Project', 'notes')
-  await waitFor(() => expect(api.changeProtection).toHaveBeenCalledWith('/p', 'protect', 'notes'))
-  expect(api.showTreeMenu).toHaveBeenCalledWith('protect')
+  await waitFor(() =>
+    expect(api.changeProtectionMany).toHaveBeenCalledWith('/p', 'protect', ['notes'])
+  )
+  expect(api.showTreeMenu).toHaveBeenCalledWith(['protect'])
 })
 
 it('stop protecting saves', async () => {
@@ -441,9 +445,9 @@ it('stop protecting saves', async () => {
   render(<App />)
   await rightClick('Protected', 'drafts')
   await waitFor(() =>
-    expect(api.changeProtection).toHaveBeenCalledWith('/p', 'unprotect', 'drafts')
+    expect(api.changeProtectionMany).toHaveBeenCalledWith('/p', 'unprotect', ['drafts'])
   )
-  expect(api.showTreeMenu).toHaveBeenCalledWith('unprotect')
+  expect(api.showTreeMenu).toHaveBeenCalledWith(['unprotect'])
 })
 
 it('no menu while the settings file is unreadable', async () => {
@@ -462,31 +466,36 @@ it('no menu while the settings file is unreadable', async () => {
 
 it('a dismissed menu writes nothing', async () => {
   const api = menuProject()
-  api.showTreeMenu.mockResolvedValue(false)
+  api.showTreeMenu.mockResolvedValue(null)
   render(<App />)
   await rightClick('Project', 'notes')
   await waitFor(() => expect(api.showTreeMenu).toHaveBeenCalled())
   await act(async () => {})
-  expect(api.changeProtection).not.toHaveBeenCalled()
+  expect(api.changeProtectionMany).not.toHaveBeenCalled()
 })
 
 it('a second action during a save is ignored', async () => {
   const api = menuProject()
-  const d = deferred<typeof draftsProtected>()
-  api.changeProtection.mockReturnValue(d.promise)
+  const d = deferred<{
+    protection: typeof draftsProtected
+    delta: { added: string[]; removed: string[] }
+  }>()
+  api.changeProtectionMany.mockReturnValue(d.promise)
   render(<App />)
   await rightClick('Project', 'notes')
-  await waitFor(() => expect(api.changeProtection).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(api.changeProtectionMany).toHaveBeenCalledTimes(1))
   await rightClick('Project', 'notes')
   await act(async () => {})
-  expect(api.changeProtection).toHaveBeenCalledTimes(1)
+  expect(api.changeProtectionMany).toHaveBeenCalledTimes(1)
   expect(api.showTreeMenu).toHaveBeenCalledTimes(1)
-  await act(async () => d.resolve(draftsProtected))
+  await act(async () =>
+    d.resolve({ protection: draftsProtected, delta: { added: [], removed: [] } })
+  )
 })
 
 it('a failed save shows the app error and leaves the sections unchanged', async () => {
   const api = menuProject()
-  api.changeProtection.mockRejectedValue(new Error('disk full'))
+  api.changeProtectionMany.mockRejectedValue(new Error('disk full'))
   render(<App />)
   await rightClick('Project', 'notes')
   expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
@@ -497,9 +506,9 @@ it('a failed save shows the app error and leaves the sections unchanged', async 
 
 it("protecting the open file's folder updates the banner", async () => {
   const api = menuProject()
-  api.changeProtection.mockResolvedValue({
-    ...noProtection,
-    settings: { version: 2, protected: ['notes'] }
+  api.changeProtectionMany.mockResolvedValue({
+    protection: { ...noProtection, settings: { version: 2, protected: ['notes'] } },
+    delta: { added: ['notes'], removed: [] }
   })
   Object.assign(api, {
     readDoc: vi.fn().mockResolvedValue({ content: 'hello\n', mtimeMs: 1 }),

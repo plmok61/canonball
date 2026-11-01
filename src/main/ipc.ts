@@ -1,8 +1,32 @@
-import { app, dialog, ipcMain, nativeTheme, safeStorage, BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, safeStorage, shell, BrowserWindow } from 'electron'
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
-import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
-import { changeProtection, loadProjectProtection, setProtectedPaths } from './projectSettings'
+import {
+  createProject,
+  listTree,
+  readDoc,
+  requireCurrentRoot,
+  resolveInside,
+  writeDoc
+} from './projectFs'
+import {
+  applyProtectionDelta,
+  changeProtectionMany,
+  loadProjectProtection,
+  setProtectedPaths
+} from './projectSettings'
+import {
+  createEntry,
+  duplicateEntries,
+  moveExact,
+  pasteEntries,
+  removeCreated,
+  renameEntry,
+  restoreEntries,
+  trashEntries
+} from './fileOps'
+import { flushHoldingArea } from './trashFlush'
+import { TREE_MENU_LABELS, type TreeMenuItem } from '../shared/treeMenuItems'
 import { showTreeMenu } from './treeMenu'
 import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
@@ -20,7 +44,16 @@ import {
   type CloudProvider,
   type ModelChoice
 } from '../shared/ai'
-import type { AppSettings, GrammarLint, ProjectInfo, ThemeSetting } from '../shared/types'
+import type {
+  AppSettings,
+  EntryKind,
+  GrammarLint,
+  Move,
+  ProjectInfo,
+  ProtectionDelta,
+  ThemeSetting,
+  TrashedItem
+} from '../shared/types'
 
 let currentRoot: string | null = null
 
@@ -91,9 +124,56 @@ async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   return next
 }
 
+function isStringArray(x: unknown): x is string[] {
+  return Array.isArray(x) && x.every((p) => typeof p === 'string')
+}
+
+function isMove(x: unknown): x is Move {
+  const m = x as Move | null
+  return !!m && typeof m === 'object' && typeof m.from === 'string' && typeof m.to === 'string'
+}
+
+function isTrashedItem(x: unknown): x is TrashedItem {
+  const t = x as TrashedItem | null
+  return (
+    !!t &&
+    typeof t === 'object' &&
+    typeof t.id === 'string' &&
+    typeof t.from === 'string' &&
+    isStringArray(t.protectedEntries)
+  )
+}
+
+function isDelta(x: unknown): x is ProtectionDelta {
+  const d = x as ProtectionDelta | null
+  return !!d && typeof d === 'object' && isStringArray(d.added) && isStringArray(d.removed)
+}
+
+function isMenuItem(x: unknown): x is TreeMenuItem | '-' {
+  return x === '-' || (typeof x === 'string' && Object.hasOwn(TREE_MENU_LABELS, x))
+}
+
+/** Moves the holding area's items to the Mac Trash; never throws. */
+export async function flushTrash(root: string | null): Promise<void> {
+  if (!root) return
+  try {
+    await flushHoldingArea(root, (p) => shell.trashItem(p))
+  } catch (err) {
+    console.error('Could not flush the holding area:', err)
+  }
+}
+
+/** The current project's holding area goes to the Trash before the app quits. */
+export function flushCurrentTrash(): Promise<void> {
+  return flushTrash(currentRoot)
+}
+
 async function openProject(root: string): Promise<ProjectInfo> {
   if (!(await stat(root)).isDirectory()) throw new Error('Not a directory')
   const tree = await listTree(root)
+  // Earlier sessions' trashed items go to the Mac Trash; so do the ones in the project being left.
+  await flushTrash(root)
+  if (currentRoot && currentRoot !== root) await flushTrash(currentRoot)
   cancelAllChats()
   proposals.clear()
   currentRoot = root
@@ -107,6 +187,10 @@ export async function applyStoredTheme(): Promise<void> {
 }
 
 export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLint[][]> }): void {
+  const rootArg = (root: unknown): string => {
+    if (typeof root !== 'string') throw new Error('Invalid argument')
+    return requireCurrentRoot(currentRoot, root)
+  }
   const parentOf = (e: Electron.IpcMainInvokeEvent): BrowserWindow | undefined =>
     BrowserWindow.fromWebContents(e.sender) ?? undefined
 
@@ -144,21 +228,115 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
     }
     return setProtectedPaths(r, paths)
   })
-  ipcMain.handle(
-    'canonball:changeProtection',
-    (_e, root: string, kind: unknown, relPath: unknown) => {
-      const r = requireCurrentRoot(currentRoot, root)
-      if ((kind !== 'protect' && kind !== 'unprotect') || typeof relPath !== 'string') {
-        throw new Error('Invalid argument')
-      }
-      return changeProtection(r, kind, relPath)
-    }
-  )
-  ipcMain.handle('canonball:showTreeMenu', (e, kind: unknown) => {
-    if (kind !== 'protect' && kind !== 'unprotect') throw new Error('Invalid argument')
+  ipcMain.handle('canonball:showTreeMenu', (e, items: unknown) => {
+    if (!Array.isArray(items) || !items.every(isMenuItem)) throw new Error('Invalid argument')
     const win = parentOf(e)
     if (!win) throw new Error('No window')
-    return showTreeMenu(win, kind)
+    return showTreeMenu(win, items)
+  })
+  ipcMain.handle('canonball:confirmDialog', async (e, opts: unknown) => {
+    const o = opts as { message?: unknown; detail?: unknown; ok?: unknown } | null
+    if (
+      !o ||
+      typeof o.message !== 'string' ||
+      typeof o.ok !== 'string' ||
+      (o.detail !== undefined && typeof o.detail !== 'string')
+    ) {
+      throw new Error('Invalid argument')
+    }
+    const win = parentOf(e)
+    const options: Electron.MessageBoxOptions = {
+      type: 'warning',
+      message: o.message,
+      detail: o.detail,
+      buttons: [o.ok, 'Cancel'],
+      defaultId: 0,
+      cancelId: 1
+    }
+    const { response } = win
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options)
+    return response === 0
+  })
+  ipcMain.handle('canonball:nativeUndo', (e) => e.sender.undo())
+  ipcMain.handle('canonball:nativeRedo', (e) => e.sender.redo())
+  ipcMain.handle(
+    'canonball:createEntry',
+    (_e, root: unknown, kind: unknown, parentRel: unknown, name: unknown) => {
+      const r = rootArg(root)
+      if (
+        (kind !== 'file' && kind !== 'folder') ||
+        typeof parentRel !== 'string' ||
+        typeof name !== 'string'
+      ) {
+        throw new Error('Invalid argument')
+      }
+      return createEntry(r, kind as EntryKind, parentRel, name)
+    }
+  )
+  ipcMain.handle('canonball:renameEntry', (_e, root: unknown, relPath: unknown, name: unknown) => {
+    const r = rootArg(root)
+    if (typeof relPath !== 'string' || typeof name !== 'string') throw new Error('Invalid argument')
+    return renameEntry(r, relPath, name)
+  })
+  ipcMain.handle(
+    'canonball:pasteEntries',
+    (_e, root: unknown, mode: unknown, relPaths: unknown, destRel: unknown) => {
+      const r = rootArg(root)
+      if (
+        (mode !== 'copy' && mode !== 'move') ||
+        !isStringArray(relPaths) ||
+        typeof destRel !== 'string'
+      ) {
+        throw new Error('Invalid argument')
+      }
+      return pasteEntries(r, mode, relPaths, destRel)
+    }
+  )
+  ipcMain.handle('canonball:duplicateEntries', (_e, root: unknown, relPaths: unknown) => {
+    const r = rootArg(root)
+    if (!isStringArray(relPaths)) throw new Error('Invalid argument')
+    return duplicateEntries(r, relPaths)
+  })
+  ipcMain.handle('canonball:moveExact', (_e, root: unknown, moves: unknown) => {
+    const r = rootArg(root)
+    if (!Array.isArray(moves) || !moves.every(isMove)) throw new Error('Invalid argument')
+    return moveExact(r, moves)
+  })
+  ipcMain.handle('canonball:trashEntries', (_e, root: unknown, relPaths: unknown) => {
+    const r = rootArg(root)
+    if (!isStringArray(relPaths)) throw new Error('Invalid argument')
+    return trashEntries(r, relPaths)
+  })
+  ipcMain.handle('canonball:restoreEntries', (_e, root: unknown, items: unknown) => {
+    const r = rootArg(root)
+    if (!Array.isArray(items) || !items.every(isTrashedItem)) throw new Error('Invalid argument')
+    return restoreEntries(r, items)
+  })
+  ipcMain.handle('canonball:removeCreated', (_e, root: unknown, relPaths: unknown) => {
+    const r = rootArg(root)
+    if (!isStringArray(relPaths)) throw new Error('Invalid argument')
+    return removeCreated(r, relPaths)
+  })
+  ipcMain.handle(
+    'canonball:changeProtectionMany',
+    (_e, root: unknown, kind: unknown, relPaths: unknown) => {
+      const r = rootArg(root)
+      if ((kind !== 'protect' && kind !== 'unprotect') || !isStringArray(relPaths)) {
+        throw new Error('Invalid argument')
+      }
+      return changeProtectionMany(r, kind, relPaths)
+    }
+  )
+  ipcMain.handle('canonball:applyProtectionDelta', (_e, root: unknown, delta: unknown) => {
+    const r = rootArg(root)
+    if (!isDelta(delta)) throw new Error('Invalid argument')
+    return applyProtectionDelta(r, delta)
+  })
+  ipcMain.handle('canonball:revealEntry', (_e, root: unknown, relPath: unknown) => {
+    const r = rootArg(root)
+    if (typeof relPath !== 'string') throw new Error('Invalid argument')
+    shell.showItemInFolder(resolveInside(r, relPath))
   })
   ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
     grammar.lint(parseLintRequest(texts))

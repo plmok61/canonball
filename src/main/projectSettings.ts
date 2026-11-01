@@ -79,27 +79,6 @@ export async function setProtectedPaths(root: string, paths: string[]): Promise<
   })
 }
 
-/**
- * Protects or unprotects one path against the list on disk right now, so an
- * outside edit is never overwritten by a stale list. Writes only on a change.
- */
-export async function changeProtection(
-  root: string,
-  kind: TreeMenuKind,
-  relPath: string
-): Promise<ProjectProtection> {
-  if (!validPath(relPath)) throw new Error('Invalid path')
-  return serialized(root, async () => {
-    const fresh = await loadProjectProtection(root)
-    if (fresh.unreadable) throw new Error('Project settings file is unreadable')
-    const current = fresh.settings.protected
-    const next =
-      kind === 'protect' ? addProtected(current, relPath) : removeProtected(current, relPath)
-    if (next.length === current.length && next.every((p, i) => p === current[i])) return fresh
-    return saveProjectSettings(root, { version: 2, protected: next })
-  })
-}
-
 function sameList(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((p, i) => p === b[i])
 }

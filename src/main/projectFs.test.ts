@@ -86,8 +86,8 @@ describe('createProject', () => {
     await fs.access(path.join(target, 'canon', 'characters.md'))
     await fs.access(path.join(target, 'memory', 'style_rules.md'))
     await expect(fs.access(path.join(target, 'CLAUDE.md'))).rejects.toThrow()
-    expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toContain(
-      '.canonball/chats/'
+    expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toBe(
+      '.canonball/chats/\n.canonball/trash/\n'
     )
   })
 

@@ -1,29 +1,31 @@
 import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
-import type { TreeMenuKind } from '../shared/types'
-
-const LABELS: Record<TreeMenuKind, string> = {
-  protect: 'Protect from AI edits',
-  unprotect: 'Stop protecting'
-}
+import { TREE_MENU_LABELS, type TreeMenuItem } from '../shared/treeMenuItems'
 
 export function buildTreeMenuTemplate(
-  kind: TreeMenuKind,
-  choose: () => void
+  items: (TreeMenuItem | '-')[],
+  choose: (item: TreeMenuItem) => void
 ): MenuItemConstructorOptions[] {
-  return [{ label: LABELS[kind], click: () => choose() }]
+  return items.map((item) =>
+    item === '-'
+      ? { type: 'separator' }
+      : { label: TREE_MENU_LABELS[item], click: () => choose(item) }
+  )
 }
 
-/** Pops the one-item menu. Resolves true if the item was clicked, false if the menu closed without a choice. */
-export function showTreeMenu(win: BrowserWindow, kind: TreeMenuKind): Promise<boolean> {
+/** Pops the menu. Resolves the clicked item, or null if the menu closed without a choice. */
+export function showTreeMenu(
+  win: BrowserWindow,
+  items: (TreeMenuItem | '-')[]
+): Promise<TreeMenuItem | null> {
   return new Promise((resolve) => {
     let settled = false
-    const settle = (chosen: boolean): void => {
+    const settle = (chosen: TreeMenuItem | null): void => {
       if (settled) return
       settled = true
       resolve(chosen)
     }
-    const menu = Menu.buildFromTemplate(buildTreeMenuTemplate(kind, () => settle(true)))
+    const menu = Menu.buildFromTemplate(buildTreeMenuTemplate(items, (item) => settle(item)))
     // Electron may call the close callback before the item's click, so let a click win.
-    menu.popup({ window: win, callback: () => setTimeout(() => settle(false), 0) })
+    menu.popup({ window: win, callback: () => setTimeout(() => settle(null), 0) })
   })
 }

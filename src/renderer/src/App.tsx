@@ -4,6 +4,7 @@ import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
 import { isProtected } from '../../shared/protection'
+import type { TreeMenuItem } from '../../shared/treeMenuItems'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import { ProtectDialog } from './tree/ProtectDialog'
@@ -178,19 +179,20 @@ function App(): React.JSX.Element {
     if (!project || !protection || protection.unreadable || saving.current) return
     const at = project.root
     const kind = inProtected ? 'unprotect' : 'protect'
-    let chosen: boolean
+    let chosen: TreeMenuItem | null
     try {
-      chosen = await window.canonball.showTreeMenu(kind)
+      chosen = await window.canonball.showTreeMenu([kind])
     } catch (e) {
       setError(message(e))
       return
     }
-    if (!chosen || saving.current) return
+    if (chosen !== 'protect' && chosen !== 'unprotect') return
+    if (saving.current) return
     saving.current = true
     setError(null)
     try {
-      const saved = await window.canonball.changeProtection(at, kind, relPath)
-      setProtectionState({ root: at, protection: saved })
+      const saved = await window.canonball.changeProtectionMany(at, kind, [relPath])
+      setProtectionState({ root: at, protection: saved.protection })
     } catch (e) {
       setError(message(e))
     } finally {

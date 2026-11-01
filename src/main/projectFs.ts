@@ -87,7 +87,11 @@ export async function createProject(targetDir: string, templateDir: string): Pro
   }
   await fsp.mkdir(targetDir, { recursive: true })
   await fsp.cp(templateDir, targetDir, { recursive: true })
-  await fsp.writeFile(path.join(targetDir, '.gitignore'), '.canonball/chats/\n', 'utf8')
+  await fsp.writeFile(
+    path.join(targetDir, '.gitignore'),
+    '.canonball/chats/\n.canonball/trash/\n',
+    'utf8'
+  )
   await fsp.mkdir(path.join(targetDir, '.canonball'), { recursive: true })
   await writeDoc(
     targetDir,

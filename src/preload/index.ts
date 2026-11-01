@@ -33,9 +33,28 @@ const api: CanonballApi = {
   setSettings: (patch) => invoke('canonball:setSettings', patch),
   getProjectProtection: () => invoke('canonball:getProjectProtection'),
   setProtectedPaths: (root, paths) => invoke('canonball:setProtectedPaths', root, paths),
-  changeProtection: (root, kind, relPath) =>
-    invoke('canonball:changeProtection', root, kind, relPath),
-  showTreeMenu: (kind) => invoke('canonball:showTreeMenu', kind),
+  showTreeMenu: (items) => invoke('canonball:showTreeMenu', items),
+  confirmDialog: (opts) => invoke('canonball:confirmDialog', opts),
+  nativeUndo: () => {
+    void invoke('canonball:nativeUndo')
+  },
+  nativeRedo: () => {
+    void invoke('canonball:nativeRedo')
+  },
+  createEntry: (root, kind, parentRel, name) =>
+    invoke('canonball:createEntry', root, kind, parentRel, name),
+  renameEntry: (root, relPath, newName) => invoke('canonball:renameEntry', root, relPath, newName),
+  pasteEntries: (root, mode, relPaths, destRel) =>
+    invoke('canonball:pasteEntries', root, mode, relPaths, destRel),
+  duplicateEntries: (root, relPaths) => invoke('canonball:duplicateEntries', root, relPaths),
+  moveExact: (root, moves) => invoke('canonball:moveExact', root, moves),
+  trashEntries: (root, relPaths) => invoke('canonball:trashEntries', root, relPaths),
+  restoreEntries: (root, items) => invoke('canonball:restoreEntries', root, items),
+  removeCreated: (root, relPaths) => invoke('canonball:removeCreated', root, relPaths),
+  changeProtectionMany: (root, kind, relPaths) =>
+    invoke('canonball:changeProtectionMany', root, kind, relPaths),
+  applyProtectionDelta: (root, delta) => invoke('canonball:applyProtectionDelta', root, delta),
+  revealEntry: (root, relPath) => invoke('canonball:revealEntry', root, relPath),
   lintGrammar: (texts) => invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler
