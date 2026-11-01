@@ -124,6 +124,35 @@ describe('proposal store', () => {
     await expect(store.apply(root, p.id)).rejects.toThrow(CHANGED_SINCE_PROPOSAL)
   })
 
+  it('stacked edits to one file can both be accepted', async () => {
+    const store = createProposalStore()
+    const access = createAiAccess(root)
+    const a = await store.proposeEdit(root, access, 'notes/ideas.md', swap)
+    const b = await store.proposeEdit(root, access, 'notes/ideas.md', [
+      { old_text: 'A hen.', new_text: 'A owl.' }
+    ])
+    await store.apply(root, a.id)
+    await store.apply(root, b.id)
+    expect(await disk('notes/ideas.md')).toBe('A wolf.\nA owl.\n')
+  })
+
+  it("a rebased edit keeps the writer's other changes", async () => {
+    const store = createProposalStore()
+    const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)
+    await fs.writeFile(path.join(root, 'notes/ideas.md'), 'A fox.\nA hen.\nA cat.\n')
+    await store.apply(root, p.id)
+    expect(await disk('notes/ideas.md')).toBe('A wolf.\nA hen.\nA cat.\n')
+  })
+
+  it('a rebased edit is refused when its old text is gone', async () => {
+    const store = createProposalStore()
+    const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)
+    await fs.writeFile(path.join(root, 'notes/ideas.md'), 'A dog.\nA hen.\n')
+    await expect(store.apply(root, p.id)).rejects.toThrow(CHANGED_SINCE_PROPOSAL)
+    expect(await disk('notes/ideas.md')).toBe('A dog.\nA hen.\n')
+    await expect(store.apply(root, p.id)).rejects.toThrow(CHANGED_SINCE_PROPOSAL)
+  })
+
   it('accept is refused if the folder became prose', async () => {
     const store = createProposalStore()
     const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)

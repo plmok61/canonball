@@ -2,6 +2,12 @@
  * In-memory proposals: validated against the access layer and the file on
  * disk when made, written only on Accept, and only if the file still holds
  * the text the proposal was built from. Proposing writes nothing.
+ *
+ * Stacked edits: if the file has moved on since an edit was proposed, Accept
+ * re-applies the edit's own old_text/new_text pairs to the current text. That
+ * only works when every old_text is still found exactly once, so it replaces
+ * nothing but the edit's own text and never overwrites the writer's changes.
+ * Otherwise Accept is refused and the proposal stays held.
  */
 import { randomUUID } from 'crypto'
 import { CHANGED_SINCE_PROPOSAL, EXPIRED_PROPOSAL } from '../../shared/proposals'
@@ -61,13 +67,27 @@ export function applyEdits(text: string, edits: EditSpec[], relPath: string): st
   return out + text.slice(at)
 }
 
+/** Re-applies an edit's own pairs to moved-on text, or throws CHANGED_SINCE_PROPOSAL. */
+function rebase(current: string, edits: EditSpec[] | undefined, relPath: string): string {
+  if (!edits) throw new Error(CHANGED_SINCE_PROPOSAL)
+  let result: string
+  try {
+    result = applyEdits(current, edits, relPath)
+  } catch (err) {
+    if (err instanceof ProposalError) throw new Error(CHANGED_SINCE_PROPOSAL)
+    throw err
+  }
+  if (result === current) throw new Error(CHANGED_SINCE_PROPOSAL)
+  return result
+}
+
 export function createProposalStore(deps?: { access?: (root: string) => AiAccess }): ProposalStore {
   const accessFor = deps?.access ?? createAiAccess
-  const held = new Map<string, { root: string; proposal: Proposal }>()
+  const held = new Map<string, { root: string; proposal: Proposal; edits?: EditSpec[] }>()
 
-  function hold(root: string, p: Omit<Proposal, 'id' | 'status'>): Proposal {
+  function hold(root: string, p: Omit<Proposal, 'id' | 'status'>, edits?: EditSpec[]): Proposal {
     const proposal: Proposal = { id: randomUUID(), status: 'pending', ...p }
-    held.set(proposal.id, { root, proposal })
+    held.set(proposal.id, { root, proposal, edits })
     return { ...proposal }
   }
 
@@ -77,7 +97,11 @@ export function createProposalStore(deps?: { access?: (root: string) => AiAccess
       const before = (await access.read(canonical)).content
       const after = applyEdits(before, edits, canonical)
       if (after === before) throw new ProposalError(`That edit doesn't change ${canonical}`)
-      return hold(root, { kind: 'edit', relPath: canonical, before, after })
+      return hold(
+        root,
+        { kind: 'edit', relPath: canonical, before, after },
+        edits.map((e) => ({ ...e }))
+      )
     },
 
     async proposeCreate(root, access, relPath, content) {
@@ -93,8 +117,9 @@ export function createProposalStore(deps?: { access?: (root: string) => AiAccess
       try {
         if (proposal.kind === 'edit') {
           const now = (await access.read(proposal.relPath)).content
-          if (now !== proposal.before) throw new Error(CHANGED_SINCE_PROPOSAL)
-          await access.write(proposal.relPath, proposal.after)
+          const next =
+            now === proposal.before ? proposal.after : rebase(now, entry.edits, proposal.relPath)
+          await access.write(proposal.relPath, next)
         } else {
           await access.create(proposal.relPath, proposal.after)
         }
