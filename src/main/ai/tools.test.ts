@@ -6,7 +6,7 @@ import { createAiAccess } from '../aiAccess'
 import { createProject } from '../projectFs'
 import { setPathAccess } from '../projectSettings'
 import { createProposalStore } from './proposals'
-import { createToolRunner, FILE_TOOLS } from './tools'
+import { createToolRunner, FILE_TOOLS, type ToolRunner } from './tools'
 import type { ToolCall } from './adapter'
 import type { Proposal } from '../../shared/proposals'
 
@@ -30,7 +30,7 @@ afterEach(async () => {
 const disk = (rel: string): Promise<string> => fs.readFile(path.join(root, rel), 'utf8')
 const call = (name: string, args: Record<string, unknown>): ToolCall => ({ id: 'c1', name, args })
 
-function runner() {
+function runner(): ToolRunner {
   return createToolRunner({
     root,
     access: createAiAccess(root),

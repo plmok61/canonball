@@ -110,6 +110,9 @@ export interface CanonballApi {
   /** Starts a stream; events arrive on onChatEvent. */
   startChat(req: ChatRequest): Promise<void>
   cancelChat(requestId: string): Promise<void>
+  /** Rejects with 'Project changed', the expired copy, the changed copy, or an access message. */
+  applyProposal(root: string, id: string): Promise<{ relPath: string }>
+  rejectProposal(id: string): Promise<void>
   /** Saved chat threads of the open project, newest first. */
   listChats(): Promise<ChatSummary[]>
   loadChat(id: string): Promise<ChatThread>

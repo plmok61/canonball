@@ -9,7 +9,9 @@ import { createSecretStore } from './ai/secrets'
 import { createAiConfig, type AiConfig } from './ai/aiConfig'
 import { listChats, loadChat, saveChat } from './chats'
 import { createChatService, type ChatService } from './ai/chatService'
+import { createProposalStore } from './ai/proposals'
 import {
+  CHAT_ID_RE,
   CLOUD_PROVIDERS,
   parseChatRequest,
   parseChatThread,
@@ -45,11 +47,15 @@ function ai(): AiConfig {
   }))
 }
 
+/** The AI's pending suggestions, shared by the chat service (which makes them) and Accept/Reject. */
+const proposals = createProposalStore()
+
 let chatService: ChatService | null = null
 function chat(): ChatService {
   return (chatService ??= createChatService({
     resolve: (p) => ai().resolve(p),
-    fetch: (input, init) => fetch(input, init)
+    fetch: (input, init) => fetch(input, init),
+    proposals
   }))
 }
 
@@ -92,6 +98,7 @@ async function openProject(root: string): Promise<ProjectInfo> {
   if (!(await stat(root)).isDirectory()) throw new Error('Not a directory')
   const tree = await listTree(root)
   cancelAllChats()
+  proposals.clear()
   currentRoot = root
   await updateSettings({ lastProjectRoot: root })
   return { root, name: basename(root), tree, access: await loadProjectAccess(root) }
@@ -177,13 +184,23 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
     const parsed = parseChatRequest(req)
     if (!parsed) throw new Error('Invalid argument')
     const wc = e.sender
-    chat().start(parsed, (ev) => {
+    chat().start(parsed, currentRoot, (ev) => {
       if (!wc.isDestroyed()) wc.send('canonball:chatEvent', ev)
     })
   })
   ipcMain.handle('canonball:cancelChat', (_e, requestId: unknown) => {
     if (typeof requestId !== 'string') throw new Error('Invalid argument')
     chat().cancel(requestId)
+  })
+  ipcMain.handle('canonball:applyProposal', (_e, root: unknown, id: unknown) => {
+    if (typeof root !== 'string' || typeof id !== 'string' || !CHAT_ID_RE.test(id)) {
+      throw new Error('Invalid argument')
+    }
+    return proposals.apply(requireCurrentRoot(currentRoot, root), id)
+  })
+  ipcMain.handle('canonball:rejectProposal', (_e, id: unknown) => {
+    if (typeof id !== 'string' || !CHAT_ID_RE.test(id)) throw new Error('Invalid argument')
+    proposals.reject(id)
   })
   ipcMain.handle('canonball:listChats', () => listChats(requireRoot()))
   ipcMain.handle('canonball:loadChat', (_e, id: unknown) => {

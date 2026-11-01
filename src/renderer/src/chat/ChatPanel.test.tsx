@@ -37,6 +37,8 @@ type Api = Record<
   | 'listModels'
   | 'startChat'
   | 'cancelChat'
+  | 'applyProposal'
+  | 'rejectProposal'
   | 'listChats'
   | 'loadChat'
   | 'saveChat'
@@ -59,6 +61,8 @@ function stub(
     listModels: vi.fn().mockResolvedValue(opts.models ?? twoProviders),
     startChat: vi.fn().mockResolvedValue(undefined),
     cancelChat: vi.fn().mockResolvedValue(undefined),
+    applyProposal: vi.fn(),
+    rejectProposal: vi.fn().mockResolvedValue(undefined),
     listChats: vi.fn().mockResolvedValue(opts.chats ?? []),
     loadChat: vi.fn(async (id: string) => {
       const t = opts.threads?.[id]

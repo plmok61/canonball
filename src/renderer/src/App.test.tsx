@@ -50,6 +50,8 @@ function stub(
     saveChat: vi.fn().mockResolvedValue(undefined),
     startChat: vi.fn().mockResolvedValue(undefined),
     cancelChat: vi.fn().mockResolvedValue(undefined),
+    applyProposal: vi.fn(),
+    rejectProposal: vi.fn().mockResolvedValue(undefined),
     onChatEvent: vi.fn(() => () => {}),
     getProjectAccess: vi.fn().mockResolvedValue(noAccess),
     setPathAccess: vi.fn().mockResolvedValue(noAccess),
