@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within
+} from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { Move, TreeNode } from '../../../shared/types'
 import { FileTree, type EditingState } from './FileTree'
+import type { DragHandlers } from './dragDrop'
 import type { Selection } from './selection'
 
 const tree: TreeNode[] = [
@@ -36,7 +45,8 @@ const base = {
   editing: null as EditingState,
   onEditSubmit: vi.fn().mockResolvedValue(null),
   onEditCancel: vi.fn(),
-  moves: [] as Move[]
+  moves: [] as Move[],
+  drag: undefined as unknown as DragHandlers
 }
 
 afterEach(cleanup)
@@ -257,4 +267,96 @@ it('shows no access badges or legend', () => {
   expect(container.querySelector('.cb-badge')).toBeNull()
   expect(screen.queryByRole('list', { name: 'AI access' })).toBeNull()
   expect(container.textContent).not.toMatch(/[✎👁⊘]/u)
+})
+
+const dt = (): { dataTransfer: Record<string, unknown> } => ({
+  dataTransfer: {
+    types: ['application/x-canonball-paths'],
+    setData: vi.fn(),
+    effectAllowed: '',
+    dropEffect: ''
+  }
+})
+
+const dragHandlers = (allow = true): DragHandlers => ({
+  onDragStart: vi.fn(),
+  onDragOver: vi.fn().mockReturnValue(allow),
+  onDrop: vi.fn(),
+  onDragEnd: vi.fn()
+})
+
+const rowOf = (name: string): Element => screen.getByText(name).closest('.cb-row')!
+
+it('rows are draggable and report the drag start', () => {
+  const drag = dragHandlers()
+  render(<FileTree {...base} drag={drag} />)
+  expect(rowOf('README')).toHaveAttribute('draggable', 'true')
+  fireEvent.dragStart(rowOf('README'), dt())
+  expect(drag.onDragStart).toHaveBeenCalledWith('README.md')
+})
+
+it('rows are not draggable while a name box is open', () => {
+  render(
+    <FileTree
+      {...base}
+      drag={dragHandlers()}
+      editing={{ mode: 'new', kind: 'file', parentRel: '' }}
+    />
+  )
+  expect(rowOf('README')).toHaveAttribute('draggable', 'false')
+})
+
+it('highlights an allowed row under the pointer and drops with the option key', () => {
+  const drag = dragHandlers()
+  render(<FileTree {...base} drag={drag} />)
+  const row = rowOf('canon')
+  fireEvent.dragOver(row, dt())
+  expect(row).toHaveClass('cb-row-drop')
+  expect(drag.onDragOver).toHaveBeenCalledWith({ relPath: 'canon', kind: 'folder' })
+  const ev = createEvent.drop(row, dt())
+  Object.defineProperty(ev, 'altKey', { value: true })
+  fireEvent(row, ev)
+  expect(drag.onDrop).toHaveBeenCalledWith({ relPath: 'canon', kind: 'folder' }, true)
+  expect(row).not.toHaveClass('cb-row-drop')
+})
+
+it('does not highlight a refused row', () => {
+  render(<FileTree {...base} drag={dragHandlers(false)} />)
+  fireEvent.dragOver(rowOf('canon'), dt())
+  expect(rowOf('canon')).not.toHaveClass('cb-row-drop')
+})
+
+it('empty space is the top-level target', () => {
+  const drag = dragHandlers()
+  render(<FileTree {...base} drag={drag} />)
+  fireEvent.drop(screen.getByRole('tree', { name: 'Project files' }).parentElement!, dt())
+  expect(drag.onDrop).toHaveBeenCalledWith({ relPath: null, kind: null }, false)
+})
+
+it('ignores drags that lack the internal type', () => {
+  const drag = dragHandlers()
+  render(<FileTree {...base} drag={drag} />)
+  fireEvent.drop(rowOf('canon'), { dataTransfer: { types: ['Files'] } })
+  expect(drag.onDrop).not.toHaveBeenCalled()
+})
+
+it('a folder hovered for a second expands; leaving cancels', () => {
+  vi.useFakeTimers()
+  try {
+    const drag = dragHandlers()
+    render(<FileTree {...base} drag={drag} />)
+    // top-level folders start open; fold canon first
+    fireEvent.click(screen.getByRole('button', { name: 'canon' }))
+    expect(screen.queryByText('characters')).toBeNull()
+    fireEvent.dragOver(rowOf('canon'), dt())
+    act(() => void vi.advanceTimersByTime(500))
+    fireEvent.dragLeave(rowOf('canon'), dt())
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(screen.queryByText('characters')).toBeNull()
+    fireEvent.dragOver(rowOf('canon'), dt())
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(screen.getByText('characters')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })

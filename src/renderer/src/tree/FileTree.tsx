@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { EntryKind, Move, TreeNode } from '../../../shared/types'
 import { remapPath } from '../../../shared/fileNames'
 import { displayName } from '../../../shared/paths'
 import { ChevronDown, ChevronRight } from '../icons'
 import { splitTree } from './splitTree'
 import { NameEditor } from './NameEditor'
+import { DRAG_TYPE, type DragHandlers, type DropOver } from './dragDrop'
 import { clickSelect, visibleOrder, type Selection } from './selection'
 
 export type EditingState =
@@ -32,6 +33,7 @@ interface Props {
   moves: Move[]
   /** Folders to show open; a new array (from the latest action) opens them. */
   expand?: string[]
+  drag: DragHandlers
 }
 
 const NO_EXPAND: string[] = []
@@ -47,7 +49,15 @@ interface Ctx {
   toggle(relPath: string): void
   click(relPath: string, e: React.MouseEvent, kind: EntryKind): void
   menu(relPath: string, inProtectedRoot: boolean): (e: React.MouseEvent) => void
+  /** The row (or `root:…` section) a drag is over and may drop on. */
+  dropOver: string | null
+  dragProps(relPath: string, kind: EntryKind, depth: number): React.HTMLAttributes<HTMLDivElement>
 }
+
+const HOVER_OPEN_MS = 1000
+
+const isTreeDrag = (e: React.DragEvent): boolean =>
+  Array.from(e.dataTransfer?.types ?? []).includes(DRAG_TYPE)
 
 const rowStyle = (depth: number): React.CSSProperties => ({
   display: 'flex',
@@ -89,7 +99,12 @@ function Rows({
 }): React.JSX.Element {
   const { editing } = ctx
   const rowClass = (relPath: string): string =>
-    ['cb-row', ctx.selected.has(relPath) && 'cb-row-selected', ctx.cut.has(relPath) && 'cb-row-cut']
+    [
+      'cb-row',
+      ctx.selected.has(relPath) && 'cb-row-selected',
+      ctx.cut.has(relPath) && 'cb-row-cut',
+      ctx.dropOver === relPath && 'cb-row-drop'
+    ]
       .filter(Boolean)
       .join(' ')
   return (
@@ -112,6 +127,7 @@ function Rows({
                 className={rowClass(n.relPath)}
                 style={rowStyle(depth)}
                 onContextMenu={ctx.menu(n.relPath, !!root)}
+                {...ctx.dragProps(n.relPath, 'folder', depth)}
               >
                 {label ?? (
                   <button
@@ -147,6 +163,7 @@ function Rows({
               className={rowClass(n.relPath)}
               style={rowStyle(depth)}
               onContextMenu={ctx.menu(n.relPath, !!root)}
+              {...ctx.dragProps(n.relPath, 'file', depth)}
             >
               {label ?? (
                 <button
@@ -198,7 +215,8 @@ export function FileTree({
   onEditSubmit,
   onEditCancel,
   moves,
-  expand = NO_EXPAND
+  expand = NO_EXPAND,
+  drag
 }: Props): React.JSX.Element {
   // Holds toggled folders: for top-level means "collapsed", for nested means "expanded".
   const [toggled, setToggled] = useState<Set<string>>(new Set())
@@ -247,7 +265,80 @@ export function FileTree({
     rest,
     isOpen
   )
+  // Drag and drop: the highlighted row, and the timer that opens a hovered folder.
+  const [dropOver, setDropOver] = useState<string | null>(null)
+  const [hoverFolder, setHoverFolder] = useState<{ path: string; depth: number } | null>(null)
+  const isOpenNow = useRef(isOpen)
+  useEffect(() => {
+    isOpenNow.current = isOpen
+  })
+  useEffect(() => {
+    if (!hoverFolder) return
+    const { path, depth } = hoverFolder
+    const timer = setTimeout(() => {
+      if (!isOpenNow.current(path, depth)) toggle(path)
+    }, HOVER_OPEN_MS)
+    return () => clearTimeout(timer)
+    // `toggle` only sets state; the timer must not restart on every render.
+  }, [hoverFolder])
+  const endDrag = (): void => {
+    setHoverFolder(null)
+    setDropOver(null)
+  }
+  const over = (e: React.DragEvent, key: string, target: DropOver, depth?: number): void => {
+    if (!isTreeDrag(e)) return
+    e.stopPropagation()
+    if (!drag.onDragOver(target)) {
+      if (dropOver === key) endDrag()
+      return
+    }
+    e.preventDefault()
+    e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move'
+    setDropOver(key)
+    const path = target.kind === 'folder' ? target.relPath : null
+    setHoverFolder((cur) =>
+      path === null ? null : cur?.path === path ? cur : { path, depth: depth ?? 0 }
+    )
+  }
+  const leave = (e: React.DragEvent, key: string): void => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setHoverFolder(null)
+    setDropOver((cur) => (cur === key ? null : cur))
+  }
+  const drop = (e: React.DragEvent, target: DropOver): void => {
+    if (!isTreeDrag(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    endDrag()
+    drag.onDrop(target, !!e.altKey)
+  }
+  const sectionProps = (key: string): React.HTMLAttributes<HTMLElement> => ({
+    onDragOver: (e) => over(e, key, { relPath: null, kind: null }),
+    onDragLeave: (e) => leave(e, key),
+    onDrop: (e) => drop(e, { relPath: null, kind: null })
+  })
   const ctx: Ctx = {
+    dropOver,
+    dragProps: (relPath, kind, depth) => {
+      const target = { relPath, kind }
+      return {
+        draggable: !editing,
+        onDragStart: (e) => {
+          if (editing) return e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer?.setData(DRAG_TYPE, relPath)
+          if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove'
+          drag.onDragStart(relPath)
+        },
+        onDragEnd: () => {
+          endDrag()
+          drag.onDragEnd()
+        },
+        onDragOver: (e) => over(e, relPath, target, depth),
+        onDragLeave: (e) => leave(e, relPath),
+        onDrop: (e) => drop(e, target)
+      }
+    },
     selected: new Set(selection.paths),
     cut: new Set(cutPaths),
     editing,
@@ -288,7 +379,13 @@ export function FileTree({
         onMenu({ relPath: null, inProtectedRoot: false })
       }}
     >
-      <section aria-label="Protected" className="cb-tree-protected">
+      <section
+        aria-label="Protected"
+        className={['cb-tree-protected', dropOver === 'root:protected' && 'cb-row-drop']
+          .filter(Boolean)
+          .join(' ')}
+        {...sectionProps('root:protected')}
+      >
         <h2 className="cb-tree-heading">Protected</h2>
         <p className="cb-tree-caption">AI can read, never edit</p>
         <div role="tree" aria-label="Protected files">
@@ -307,7 +404,11 @@ export function FileTree({
           <p className="cb-tree-hint">Right-click a folder or file to protect it from AI edits.</p>
         )}
       </section>
-      <section aria-label="Project">
+      <section
+        aria-label="Project"
+        className={dropOver === 'root:project' ? 'cb-row-drop' : undefined}
+        {...sectionProps('root:project')}
+      >
         <div role="tree" aria-label="Project files">
           {editing?.mode === 'new' && editing.parentRel === '' && <NewRow ctx={ctx} depth={0} />}
           <Rows nodes={rest} depth={0} ctx={ctx} />

@@ -240,6 +240,13 @@ body {
   font-size: 12px;
 }
 
+.cb-row-drop {
+  background: var(--selection);
+  color: var(--text);
+  outline: 1px dashed var(--accent-warn);
+  outline-offset: -1px;
+}
+
 .cb-row-cut {
   opacity: 0.5;
 }
@@ -257,7 +264,10 @@ body {
   border-radius: 3px;
   background: var(--bg);
   color: var(--text);
-  font: 13px -apple-system, system-ui, sans-serif;
+  font:
+    13px -apple-system,
+    system-ui,
+    sans-serif;
 }
 
 .cb-name-error {

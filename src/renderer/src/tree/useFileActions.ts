@@ -17,6 +17,8 @@ import {
 } from '../../../shared/treeMenuItems'
 import { flushAll } from '../editor/saveRegistry'
 import type { EditingState, MenuTarget } from './FileTree'
+import type { DragHandlers } from './dragDrop'
+import { dropTarget } from './dragDrop'
 import { createHistory, type History, type HistoryResult, type Step } from './history'
 import { arrowSelect, visibleOrder, type Selection } from './selection'
 import { splitTree } from './splitTree'
@@ -57,6 +59,7 @@ export interface FileActions {
   moves: Move[]
   /** Folders the latest action wants shown open. */
   expand: string[]
+  drag: DragHandlers
 }
 
 const NO_PATHS: string[] = []
@@ -218,25 +221,65 @@ export function useFileActions({
     setClipState({ project, clip: { mode, paths: topmost(targets) } })
   }
 
-  const paste = (dest: string): Promise<void> => {
-    const c = clip
-    if (!c || c.paths.length === 0) return Promise.resolve()
-    return run(c.paths, async (at) => {
-      const r = await api.pasteEntries(at, c.mode === 'cut' ? 'move' : 'copy', c.paths, dest)
+  /**
+   * Copies or moves `paths` into `dest`: shared by paste and drop. Only a paste
+   * from the clipboard empties it.
+   */
+  const transfer = (
+    mode: 'copy' | 'cut',
+    paths: string[],
+    dest: string,
+    label: string,
+    fromClip: boolean
+  ): Promise<void> =>
+    run(paths, async (at) => {
+      const r = await api.pasteEntries(at, mode === 'cut' ? 'move' : 'copy', paths, dest)
       if (!live(at)) return
       apply(r)
-      if (c.mode === 'cut') {
-        // Cut items leave the clipboard after one paste.
+      if (mode === 'cut') {
         // A cut pasted back into its own folder moves nothing and stays on the clipboard.
         if (r.moves.length === 0) return
-        setClipState(null)
-        push({ kind: 'move', label: 'Paste', moves: r.moves })
+        // Cut items leave the clipboard after one paste.
+        if (fromClip) setClipState(null)
+        push({ kind: 'move', label, moves: r.moves })
         follow(r.moves)
       } else if (r.created.length) {
-        push({ kind: 'create', label: 'Paste', created: r.created })
+        push({ kind: 'create', label, created: r.created })
         select(r.created)
       }
     })
+
+  const paste = (dest: string): Promise<void> => {
+    const c = clip
+    if (!c || c.paths.length === 0) return Promise.resolve()
+    return transfer(c.mode, c.paths, dest, 'Paste', true)
+  }
+
+  // Drag and drop: the items being dragged, set on drag start.
+  const dragging = useRef<string[] | null>(null)
+  const drag: DragHandlers = {
+    onDragStart: (relPath) => {
+      dragging.current = null
+      if (!project || editing || savingRef.current) return
+      if (selection.paths.includes(relPath)) dragging.current = topmost(selection.paths)
+      else {
+        dragging.current = [relPath]
+        setSelection({ paths: [relPath], anchor: relPath })
+      }
+    },
+    onDragOver: (target) =>
+      dragging.current !== null && dropTarget(dragging.current, target) !== null,
+    onDrop: (target, copy) => {
+      const items = dragging.current
+      dragging.current = null
+      if (!items || savingRef.current) return
+      const dest = dropTarget(items, target)
+      if (dest === null) return
+      void transfer(copy ? 'copy' : 'cut', items, dest, copy ? 'Copy' : 'Move', false)
+    },
+    onDragEnd: () => {
+      dragging.current = null
+    }
   }
 
   const duplicate = (targets: string[]): Promise<void> => {
@@ -562,6 +605,7 @@ export function useFileActions({
     undo,
     redo,
     moves,
-    expand
+    expand,
+    drag
   }
 }

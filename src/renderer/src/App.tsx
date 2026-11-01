@@ -283,6 +283,7 @@ function App(): React.JSX.Element {
           onEditCancel={actions.onEditCancel}
           moves={actions.moves}
           expand={actions.expand}
+          drag={actions.drag}
         />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />

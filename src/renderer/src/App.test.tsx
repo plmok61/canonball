@@ -1006,3 +1006,59 @@ it('undo while the name box is open is native text undo, not file undo', async (
   expect(api.nativeUndo).toHaveBeenCalledTimes(1)
   expect(api.moveExact).not.toHaveBeenCalled()
 })
+
+function dnd(): { dataTransfer: Record<string, unknown> } {
+  return {
+    dataTransfer: {
+      types: ['application/x-canonball-paths'],
+      setData: vi.fn(),
+      effectAllowed: '',
+      dropEffect: ''
+    }
+  }
+}
+
+async function dragAOnto(init: { altKey?: boolean }): Promise<ReturnType<typeof actionProject>> {
+  const api = actionProject()
+  api.pasteEntries.mockResolvedValue({
+    tree: actionTree,
+    protection: draftsProtected,
+    created: ['canon/a.md'],
+    moves: [{ from: 'notes/a.md', to: 'canon/a.md' }]
+  })
+  render(<App />)
+  await openA()
+  const from = screen.getByRole('button', { name: 'a' }).closest('.cb-row')!
+  const to = screen.getByRole('button', { name: 'canon' }).closest('.cb-row')!
+  const t = dnd()
+  fireEvent.dragStart(from, t)
+  for (const make of [createEvent.dragOver, createEvent.drop]) {
+    const ev = make(to, t)
+    Object.defineProperty(ev, 'altKey', { value: !!init.altKey })
+    fireEvent(to, ev)
+  }
+  return api
+}
+
+it('drag a file onto a folder moves it', async () => {
+  const api = await dragAOnto({})
+  await waitFor(() =>
+    expect(api.pasteEntries).toHaveBeenCalledWith('/p', 'move', ['notes/a.md'], 'canon')
+  )
+})
+
+it('option-drop copies', async () => {
+  const api = await dragAOnto({ altKey: true })
+  await waitFor(() =>
+    expect(api.pasteEntries).toHaveBeenCalledWith('/p', 'copy', ['notes/a.md'], 'canon')
+  )
+})
+
+it('a drop that is not from the tree is ignored', async () => {
+  const api = actionProject()
+  render(<App />)
+  await openA()
+  const to = screen.getByRole('button', { name: 'canon' }).closest('.cb-row')!
+  fireEvent.drop(to, { dataTransfer: { types: ['Files'] } })
+  expect(api.pasteEntries).not.toHaveBeenCalled()
+})
