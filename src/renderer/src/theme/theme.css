@@ -17,6 +17,9 @@
   /* Pressed toolbar buttons, the active picker segment, the selected tree row. */
   --active: #6b6355;
   --active-text: #fdfcfa;
+  /* Lines an AI suggestion adds or removes. */
+  --add-bg: #e4edd6;
+  --del-bg: #f5ded6;
 }
 
 [data-theme='dark'] {
@@ -36,4 +39,6 @@
   --lint-grammar: #7fa8d8;
   --active: #b8ae9c;
   --active-text: #1c1b19;
+  --add-bg: #283222;
+  --del-bg: #3b2621;
 }

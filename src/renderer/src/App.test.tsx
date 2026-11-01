@@ -389,3 +389,76 @@ it("doesn't write when the prose list is unchanged, even with unlisted entries",
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(api.setProsePaths).not.toHaveBeenCalled()
 })
+
+it('an accepted change refreshes the tree and reloads the open file', async () => {
+  // jsdom lacks the layout APIs ProseMirror probes.
+  Range.prototype.getBoundingClientRect = () => new DOMRect()
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: [][Symbol.iterator]
+    }) as unknown as DOMRectList
+  document.elementFromPoint = () => null
+
+  const api = stub('/p')
+  const notesTree = [
+    {
+      name: 'notes',
+      relPath: 'notes',
+      kind: 'folder' as const,
+      children: [{ name: 'ideas.md', relPath: 'notes/ideas.md', kind: 'file' as const }]
+    }
+  ]
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: notesTree, access: noAccess })
+  const thread = {
+    version: 1,
+    id: '33333333-3333-4333-8333-333333333333',
+    title: 'Notes',
+    createdAt: '2026-10-31T00:00:00.000Z',
+    updatedAt: '2026-10-31T00:00:00.000Z',
+    messages: [
+      { role: 'user', content: 'tidy', at: '2026-10-31T00:00:00.000Z' },
+      {
+        role: 'assistant',
+        content: 'Here.',
+        at: '2026-10-31T00:00:01.000Z',
+        proposals: [
+          {
+            id: '44444444-4444-4444-8444-444444444444',
+            kind: 'edit',
+            relPath: 'notes/ideas.md',
+            before: 'old idea\n',
+            after: 'new idea\n',
+            status: 'pending'
+          }
+        ]
+      }
+    ]
+  }
+  const more = window.canonball as unknown as Record<string, Mock>
+  more.listChats.mockResolvedValue([
+    { id: thread.id, title: thread.title, updatedAt: thread.updatedAt }
+  ])
+  more.loadChat.mockResolvedValue(thread)
+  more.applyProposal.mockResolvedValue({ relPath: 'notes/ideas.md' })
+  Object.assign(more, {
+    readDoc: vi.fn().mockResolvedValue({ content: 'old idea\n', mtimeMs: 1 }),
+    writeDoc: vi.fn(),
+    onFlushRequest: vi.fn(),
+    lintGrammar: vi.fn(async (texts: string[]) => texts.map(() => []))
+  })
+
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'ideas' }))
+  const page = screen.getByTestId('editor-panel')
+  await waitFor(() => expect(page.querySelector('.ProseMirror')).toHaveTextContent('old idea'))
+  const refreshesBefore = more.refreshTree.mock.calls.length
+
+  more.readDoc.mockResolvedValue({ content: 'new idea\n', mtimeMs: 2 })
+  const chat = screen.getByTestId('chat-panel')
+  fireEvent.click(await within(chat).findByRole('button', { name: 'Accept' }))
+  await waitFor(() => expect(page.querySelector('.ProseMirror')).toHaveTextContent('new idea'))
+  expect(more.refreshTree.mock.calls.length).toBeGreaterThan(refreshesBefore)
+  expect(more.writeDoc).not.toHaveBeenCalled()
+})

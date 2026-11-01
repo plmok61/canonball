@@ -27,14 +27,24 @@ interface EditorProps {
   relPath: string
   /** Whether the project's settings mark this file as prose (shows the draft banner). */
   isProse: boolean
+  /** A change reloads the file from disk, unless it has unsaved edits. */
+  reloadToken?: number
 }
 
-export function Editor({ root, relPath, isProse }: EditorProps): React.JSX.Element {
+export function Editor({ root, relPath, isProse, reloadToken }: EditorProps): React.JSX.Element {
   // A fresh instance per file keeps load, autosave and flush scoped to one path.
-  return <FileEditor key={`${root}\0${relPath}`} root={root} relPath={relPath} isProse={isProse} />
+  return (
+    <FileEditor
+      key={`${root}\0${relPath}`}
+      root={root}
+      relPath={relPath}
+      isProse={isProse}
+      reloadToken={reloadToken}
+    />
+  )
 }
 
-function FileEditor({ root, relPath, isProse }: EditorProps): React.JSX.Element {
+function FileEditor({ root, relPath, isProse, reloadToken }: EditorProps): React.JSX.Element {
   const extensions = useMemo(
     () => [
       ...createExtensions(),
@@ -111,27 +121,40 @@ function FileEditor({ root, relPath, isProse }: EditorProps): React.JSX.Element 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, relPath])
 
+  /** Picks up a change made on disk (another app, an accepted AI edit) unless the writer has unsaved edits. */
+  const reloadFromDisk = (): void => {
+    if (!editor || !loaded || autosave.current?.dirty) return
+    void window.canonball
+      .readDoc(relPath)
+      .then((file) => {
+        if (editor.isDestroyed || autosave.current?.dirty) return
+        if (file.mtimeMs === mtime.current) return
+        doc.current = loadIntoEditor(editor, file.content)
+        mtime.current = file.mtimeMs
+        autosave.current = makeAutosave(serializeEditor(editor, doc.current))
+      })
+      .catch(() => {
+        // transient read failure: keep what is on screen, try again next time
+      })
+  }
+  const reloadRef = useRef(reloadFromDisk)
   useEffect(() => {
-    if (!editor || !loaded) return
-    const onFocus = (): void => {
-      if (autosave.current?.dirty) return
-      void window.canonball
-        .readDoc(relPath)
-        .then((file) => {
-          if (editor.isDestroyed || autosave.current?.dirty) return
-          if (file.mtimeMs === mtime.current) return
-          doc.current = loadIntoEditor(editor, file.content)
-          mtime.current = file.mtimeMs
-          autosave.current = makeAutosave(serializeEditor(editor, doc.current))
-        })
-        .catch(() => {
-          // transient read failure: keep what is on screen, try again next focus
-        })
-    }
+    reloadRef.current = reloadFromDisk
+  })
+
+  useEffect(() => {
+    const onFocus = (): void => reloadRef.current()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, loaded, relPath])
+  }, [])
+
+  // The token this file was opened with is already reflected by its first load.
+  const seenToken = useRef(reloadToken)
+  useEffect(() => {
+    if (reloadToken === seenToken.current) return
+    seenToken.current = reloadToken
+    reloadRef.current()
+  }, [reloadToken])
 
   const words =
     useEditorState({

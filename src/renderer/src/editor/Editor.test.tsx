@@ -125,6 +125,49 @@ it('reloads from disk on focus when clean and mtime changed', async () => {
   expect(api.writeDoc).not.toHaveBeenCalled()
 })
 
+it('reloadToken reloads a clean editor from disk', async () => {
+  const api = stub('old text\n', 1)
+  const { rerender } = render(
+    <Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={0} />
+  )
+  await ready()
+  expect(document.querySelector('.ProseMirror')).toHaveTextContent('old text')
+  api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
+  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={1} />)
+  await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('new text'))
+  expect(api.writeDoc).not.toHaveBeenCalled()
+})
+
+it('reloadToken leaves a dirty editor alone', async () => {
+  const api = stub('old text\n', 1)
+  const { rerender } = render(
+    <Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={0} />
+  )
+  const editor = await ready()
+  act(() => {
+    editor.commands.insertContent('mine ')
+  })
+  api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
+  const callsBefore = api.readDoc.mock.calls.length
+  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={1} />)
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20))
+  })
+  expect(api.readDoc.mock.calls.length).toBe(callsBefore)
+  expect(document.querySelector('.ProseMirror')).toHaveTextContent('mine')
+  expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('new text')
+})
+
+it('opening a file does not reload it again for an earlier reloadToken', async () => {
+  const api = stub('old text\n', 1)
+  render(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={3} />)
+  await ready()
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20))
+  })
+  expect(api.readDoc).toHaveBeenCalledTimes(1)
+})
+
 it('does not reload on focus when there are unsaved edits', async () => {
   const api = stub('old text\n', 1)
   render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)

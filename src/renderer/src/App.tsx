@@ -35,6 +35,8 @@ function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Bumped whenever an AI connection changes; the chat panel reloads on it.
   const [aiVersion, setAiVersion] = useState(0)
+  // Bumped when an accepted AI change rewrote the open file; the editor reloads on it.
+  const [reloadToken, setReloadToken] = useState(0)
   const switching = useRef(false)
   const saving = useRef(false)
 
@@ -137,6 +139,19 @@ function App(): React.JSX.Element {
   const tree = refreshed && refreshed.root === project?.root ? refreshed.tree : project?.tree
   const access = accessState && accessState.root === root ? accessState.access : project?.access
   const sorted = useMemo(() => sortTree(tree ?? []), [tree])
+
+  /** An accepted AI suggestion wrote `relPath`. */
+  const onFileChanged = (relPath: string): void => {
+    if (!project) return
+    const at = project.root
+    window.canonball
+      .refreshTree()
+      .then((t) => setRefreshed({ root: at, tree: t }))
+      .catch(() => {
+        // keep the last known tree
+      })
+    if (relPath === selectedPath) setReloadToken((n) => n + 1)
+  }
 
   const cycle = (relPath: string): void => {
     if (!project || !access || saving.current) return
@@ -272,6 +287,7 @@ function App(): React.JSX.Element {
             root={project.root}
             relPath={selectedPath}
             isProse={isProse((access ?? project.access).settings, selectedPath)}
+            reloadToken={reloadToken}
           />
         ) : (
           <p className="editor-empty">Choose a file from the project</p>
@@ -285,6 +301,7 @@ function App(): React.JSX.Element {
           root={project.root}
           aiVersion={aiVersion}
           onOpenSettings={() => setSettingsOpen(true)}
+          onFileChanged={onFileChanged}
         />
       </aside>
     </div>

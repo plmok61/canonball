@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   chatTitle,
+  turnsForModel,
   type AiStatus,
   type ChatEvent,
   type ChatMessage,
@@ -12,6 +13,8 @@ import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
 import { hasConnection, message, parseChoice, type View } from './chatPanelState'
 import { ChatLog } from './ChatLog'
+import { ProposalCard } from './ProposalCard'
+import { useProposals } from './useProposals'
 import './chat.css'
 
 interface Props {
@@ -19,13 +22,20 @@ interface Props {
   /** Bumped when an AI connection changes; models are fetched again. */
   aiVersion: number
   onOpenSettings(): void
+  /** A file was written because the writer accepted an AI suggestion. */
+  onFileChanged(relPath: string): void
 }
 
 const NO_REPLY = 'No reply came back. Try again or pick another model.'
 /** A Stop click this soon after Send is the second half of a double-click, not a request to stop. */
 const STOP_GRACE_MS = 300
 
-export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX.Element {
+export function ChatPanel({
+  root,
+  aiVersion,
+  onOpenSettings,
+  onFileChanged
+}: Props): React.JSX.Element {
   const [status, setStatus] = useState<AiStatus | null>(null)
   const [models, setModels] = useState<ModelList | null>(null)
   const [summaries, setSummaries] = useState<ChatSummary[]>([])
@@ -76,7 +86,8 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     if (!thread) return
     const msgs = thread.messages
     const last = msgs[msgs.length - 1]
-    const empty = !!last && last.role === 'assistant' && last.content === ''
+    const empty =
+      !!last && last.role === 'assistant' && last.content === '' && !last.proposals?.length
     const kept = empty ? msgs.slice(0, -1) : msgs
     const done: ChatThread = { ...thread, updatedAt: new Date().toISOString(), messages: kept }
     commit({ ...viewRef.current, thread: done })
@@ -85,20 +96,25 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     save(done)
   }
 
+  /** Changes the streaming reply, reading the latest view so concurrent updates are kept. */
+  const changeReply = (change: (reply: ChatMessage) => ChatMessage): void => {
+    const { thread } = viewRef.current
+    if (!thread) return
+    const msgs = thread.messages.slice()
+    const last = msgs[msgs.length - 1]
+    if (!last || last.role !== 'assistant') return
+    msgs[msgs.length - 1] = change(last)
+    commit({ ...viewRef.current, thread: { ...thread, messages: msgs } })
+  }
+
   const onEvent = (e: ChatEvent): void => {
     if (e.requestId !== activeRef.current) return
     if (e.kind === 'delta') {
-      const { thread } = viewRef.current
-      if (!thread) return
-      const msgs = thread.messages.slice()
-      const last = msgs[msgs.length - 1]
-      if (!last || last.role !== 'assistant') return
-      msgs[msgs.length - 1] = { ...last, content: last.content + e.text }
-      commit({ ...viewRef.current, thread: { ...thread, messages: msgs } })
+      changeReply((m) => ({ ...m, content: m.content + e.text }))
+    } else if (e.kind === 'proposal') {
+      changeReply((m) => ({ ...m, proposals: [...(m.proposals ?? []), e.proposal] }))
     } else if (e.kind === 'done') {
       finish(e.requestId, null, e.stopped)
-    } else if (e.kind === 'proposal') {
-      // Proposal cards are wired up in a later task.
     } else {
       finish(e.requestId, e.message)
     }
@@ -173,7 +189,29 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     }
   }, [aiVersion])
 
+  const proposals = useProposals({
+    root,
+    viewRef,
+    alive,
+    onFileChanged,
+    update: (thread) => {
+      commit({ ...viewRef.current, thread })
+      save(thread)
+    }
+  })
+
   const messages = view.thread?.messages ?? []
+
+  const renderProposals = (i: number): React.ReactNode =>
+    messages[i]?.proposals?.map((p) => (
+      <ProposalCard
+        key={p.id}
+        proposal={p}
+        busy={proposals.busy.has(p.id)}
+        onAccept={() => proposals.accept(p)}
+        onReject={() => proposals.reject(p)}
+      />
+    ))
 
   const chosen = status?.model ?? null
   const busy = streaming !== null
@@ -230,7 +268,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
     const userMsg: ChatMessage = { role: 'user', content: text, at: now }
     const withUser: ChatThread = { ...base, updatedAt: now, messages: [...base.messages, userMsg] }
     // Turns are taken before the empty reply is added: the last turn must be the writer's.
-    const turns = withUser.messages.map(({ role, content }) => ({ role, content }))
+    const turns = turnsForModel(withUser.messages)
     const reply: ChatMessage = { role: 'assistant', content: '', at: now, model: chosen }
     const requestId = crypto.randomUUID()
 
@@ -276,6 +314,7 @@ export function ChatPanel({ root, aiVersion, onOpenSettings }: Props): React.JSX
         busy={busy}
         connected={connected}
         onOpenSettings={onOpenSettings}
+        renderProposals={renderProposals}
       />
       {error && (
         <p role="alert" className="cb-chat-error">
