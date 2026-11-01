@@ -184,8 +184,8 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void } {
   return { promise, resolve }
 }
 
-const canonTag = async (): Promise<Element | null> =>
-  (await screen.findByText('canon')).closest('.cb-row')!.querySelector('.cb-protected-tag')
+const canonTag = async (): Promise<HTMLElement | null> =>
+  within(await screen.findByRole('region', { name: 'Protected' })).queryByText('canon')
 
 it("discards an old project's focus-refresh protection after a switch", async () => {
   const api = stub('/p')

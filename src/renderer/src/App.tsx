@@ -229,7 +229,8 @@ function App(): React.JSX.Element {
           tree={sorted}
           selected={selectedPath}
           onOpen={setSelectedPath}
-          settings={(protection ?? project.protection).settings}
+          protectedPaths={(protection ?? project.protection).settings.protected}
+          onRowMenu={() => {}}
         />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />
