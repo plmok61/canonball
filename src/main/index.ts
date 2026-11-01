@@ -126,7 +126,9 @@ app.whenReady().then(async () => {
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+    // zoom: true — without it the toolkit swallows Cmd/Ctrl+Minus (and
+    // Cmd/Ctrl+Shift+=) before the View menu's zoom accelerators see them.
+    optimizer.watchWindowShortcuts(window, { zoom: true })
   })
 
   registerIpc(grammar)
