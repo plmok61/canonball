@@ -16,7 +16,7 @@ const alreadyExists = (rel: string): Error =>
 const gone = (rel: string): Error => new Error(`"${path.posix.basename(rel)}" no longer exists`)
 
 /** A writer-visible project path: valid, no dot-segment, no `node_modules`. */
-function checkedPath(root: string, rel: string): string {
+export function checkedPath(root: string, rel: string): string {
   if (
     !validPath(rel) ||
     rel.split('/').some((seg) => seg.startsWith('.') || seg === 'node_modules')

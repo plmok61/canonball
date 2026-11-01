@@ -49,4 +49,32 @@ describe('flushHoldingArea', () => {
     })
     expect(seen).toHaveLength(2)
   })
+
+  it('does not follow a symlinked id folder', async () => {
+    const hold = path.join(root, '.canonball', 'trash')
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'cb-out-'))
+    await fs.writeFile(path.join(outside, 'precious.md'), 'x')
+    await fs.mkdir(hold, { recursive: true })
+    await fs.symlink(outside, path.join(hold, 'x'))
+    const seen: string[] = []
+    await flushHoldingArea(root, async (p) => {
+      seen.push(p)
+    })
+    expect(seen).toEqual([])
+    await fs.rm(outside, { recursive: true, force: true })
+  })
+
+  it('a symlinked trash folder is a no-op', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'cb-out-'))
+    await fs.mkdir(path.join(outside, 'a'))
+    await fs.writeFile(path.join(outside, 'a', 'precious.md'), 'x')
+    await fs.mkdir(path.join(root, '.canonball'))
+    await fs.symlink(outside, path.join(root, '.canonball', 'trash'))
+    const seen: string[] = []
+    await flushHoldingArea(root, async (p) => {
+      seen.push(p)
+    })
+    expect(seen).toEqual([])
+    await fs.rm(outside, { recursive: true, force: true })
+  })
 })

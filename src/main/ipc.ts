@@ -1,14 +1,7 @@
 import { app, dialog, ipcMain, nativeTheme, safeStorage, shell, BrowserWindow } from 'electron'
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
-import {
-  createProject,
-  listTree,
-  readDoc,
-  requireCurrentRoot,
-  resolveInside,
-  writeDoc
-} from './projectFs'
+import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import {
   applyProtectionDelta,
   changeProtectionMany,
@@ -16,6 +9,7 @@ import {
   setProtectedPaths
 } from './projectSettings'
 import {
+  checkedPath,
   createEntry,
   duplicateEntries,
   moveExact,
@@ -336,7 +330,7 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
   ipcMain.handle('canonball:revealEntry', (_e, root: unknown, relPath: unknown) => {
     const r = rootArg(root)
     if (typeof relPath !== 'string') throw new Error('Invalid argument')
-    shell.showItemInFolder(resolveInside(r, relPath))
+    shell.showItemInFolder(checkedPath(r, relPath))
   })
   ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
     grammar.lint(parseLintRequest(texts))

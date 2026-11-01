@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  checkedPath,
   createEntry,
   moveExact,
   pasteEntries,
@@ -240,5 +241,18 @@ describe('validation', () => {
     await expect(renameEntry(root, '.canonball', 'y')).rejects.toThrow()
     await expect(pasteEntries(root, 'copy', ['x.md'], 'node_modules')).rejects.toThrow()
     expect(await exists('.x.md')).toBe(false)
+  })
+})
+
+describe('checkedPath (used by reveal)', () => {
+  it('refuses dot-segments and node_modules, accepts plain paths', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cb-cp-'))
+    const real = await fs.realpath(dir)
+    expect(() => checkedPath(dir, '.canonball/trash')).toThrow()
+    expect(() => checkedPath(dir, 'a/.git')).toThrow()
+    expect(() => checkedPath(dir, 'node_modules/x')).toThrow()
+    expect(checkedPath(dir, 'notes/a.md')).toBe(path.join(dir, 'notes/a.md'))
+    expect(real).toBeTruthy()
+    await fs.rm(dir, { recursive: true, force: true })
   })
 })
