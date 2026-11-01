@@ -15,7 +15,15 @@ body {
 .app {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) 290px;
+  /* One row exactly the window's height, so each column scrolls inside itself. */
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
+}
+
+[data-testid='editor-panel'] {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 [data-testid='tree-panel'] {
@@ -26,8 +34,10 @@ body {
   border-right: 1px solid var(--border);
 }
 
-[data-testid='tree-panel'] > [role='tree'] {
+/* Protected and Project scroll together; the footer stays put. */
+.cb-tree-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -36,6 +46,7 @@ body {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
   background: var(--bg-chat);
   border-left: 1px solid var(--border);
   color: var(--text);
