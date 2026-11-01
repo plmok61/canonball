@@ -50,6 +50,12 @@ body {
   color: var(--active-text);
 }
 
+.cb-tree-protected {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
 .cb-tree-heading {
   margin: 8px 8px 0;
   font-size: 11px;

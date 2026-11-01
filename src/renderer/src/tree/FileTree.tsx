@@ -136,7 +136,7 @@ export function FileTree({
   const { protectedRoots, rest } = splitTree(tree, protectedPaths)
   return (
     <>
-      <section aria-label="Protected">
+      <section aria-label="Protected" className="cb-tree-protected">
         <h2 className="cb-tree-heading">Protected</h2>
         <p className="cb-tree-caption">AI can read, never edit</p>
         <div role="tree" aria-label="Protected files">
