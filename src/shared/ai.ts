@@ -204,11 +204,7 @@ export function parseChatThread(x: unknown): ChatThread | null {
 
 export function parseChatRequest(x: unknown): ChatRequest | null {
   if (!isRecord(x)) return null
-  if (
-    typeof x.requestId !== 'string' ||
-    x.requestId === '' ||
-    x.requestId.length > REQUEST_ID_MAX
-  )
+  if (typeof x.requestId !== 'string' || x.requestId === '' || x.requestId.length > REQUEST_ID_MAX)
     return null
   const model = parseModelChoice(x.model)
   if (!model) return null

@@ -26,8 +26,13 @@ it('returns defaults when file is corrupt JSON', async () => {
 
 it('save then load round-trips', async () => {
   const file = join(dir, 'settings.json')
-  const s = { lastProjectRoot: '/some/where', theme: 'dark' as const,
-    ai: { localUrl: 'http://localhost:11434/v1', model: { provider: 'local' as const, model: 'llama3' } }
+  const s = {
+    lastProjectRoot: '/some/where',
+    theme: 'dark' as const,
+    ai: {
+      localUrl: 'http://localhost:11434/v1',
+      model: { provider: 'local' as const, model: 'llama3' }
+    }
   }
   await saveSettings(file, s)
   expect(await loadSettings(file)).toEqual(s)

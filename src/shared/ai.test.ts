@@ -98,7 +98,9 @@ describe('parseChatThread', () => {
     expect(
       parseChatThread(
         thread({
-          messages: [{ role: 'user', content: 'x', at: 'y', model: { provider: 'zzz', model: 'm' } }]
+          messages: [
+            { role: 'user', content: 'x', at: 'y', model: { provider: 'zzz', model: 'm' } }
+          ]
         })
       )
     ).toBeNull()
