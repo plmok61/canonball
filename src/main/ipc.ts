@@ -3,6 +3,7 @@ import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
 import { loadProjectProtection, setProtectedPaths } from './projectSettings'
+import { showTreeMenu } from './treeMenu'
 import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
 import { createSecretStore } from './ai/secrets'
@@ -142,6 +143,12 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
       throw new Error('Invalid argument')
     }
     return setProtectedPaths(r, paths)
+  })
+  ipcMain.handle('canonball:showTreeMenu', (e, kind: unknown) => {
+    if (kind !== 'protect' && kind !== 'unprotect') throw new Error('Invalid argument')
+    const win = parentOf(e)
+    if (!win) throw new Error('No window')
+    return showTreeMenu(win, kind)
   })
   ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
     grammar.lint(parseLintRequest(texts))

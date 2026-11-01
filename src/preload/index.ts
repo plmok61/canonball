@@ -33,6 +33,7 @@ const api: CanonballApi = {
   setSettings: (patch) => invoke('canonball:setSettings', patch),
   getProjectProtection: () => invoke('canonball:getProjectProtection'),
   setProtectedPaths: (root, paths) => invoke('canonball:setProtectedPaths', root, paths),
+  showTreeMenu: (kind) => invoke('canonball:showTreeMenu', kind),
   lintGrammar: (texts) => invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler

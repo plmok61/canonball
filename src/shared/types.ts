@@ -35,6 +35,8 @@ export interface AppSettings {
   ai: { localUrl: string | null; model: ModelChoice | null }
 }
 
+export type TreeMenuKind = 'protect' | 'unprotect'
+
 export type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
 
 /** The renderer's reply to a flush request before the window closes. */
@@ -88,6 +90,7 @@ export interface CanonballApi {
   getProjectProtection(): Promise<ProjectProtection>
   /** Rejects with 'Project changed' if `root` is no longer the open project. */
   setProtectedPaths(root: string, paths: string[]): Promise<ProjectProtection>
+  showTreeMenu(kind: TreeMenuKind): Promise<boolean>
   /** One array of lints per input text, in the same order. */
   lintGrammar(texts: string[]): Promise<GrammarLint[][]>
   onFlushRequest(handler: () => Promise<void>): void

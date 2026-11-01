@@ -3,7 +3,7 @@ import type { ProjectInfo, ProjectProtection, TreeNode } from '../../shared/type
 import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
-import { isProtected } from '../../shared/protection'
+import { addProtected, isProtected, removeProtected } from '../../shared/protection'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import { ProtectDialog } from './tree/ProtectDialog'
@@ -174,6 +174,31 @@ function App(): React.JSX.Element {
       })
   }
 
+  const onRowMenu = async (relPath: string, inProtected: boolean): Promise<void> => {
+    if (!project || !protection || saving.current) return
+    const at = project.root
+    let chosen: boolean
+    try {
+      chosen = await window.canonball.showTreeMenu(inProtected ? 'unprotect' : 'protect')
+    } catch (e) {
+      setError(message(e))
+      return
+    }
+    if (!chosen || saving.current) return
+    const current = protection.settings.protected
+    const next = inProtected ? removeProtected(current, relPath) : addProtected(current, relPath)
+    saving.current = true
+    setError(null)
+    try {
+      const saved = await window.canonball.setProtectedPaths(at, next)
+      setProtectionState({ root: at, protection: saved })
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      saving.current = false
+    }
+  }
+
   const settingsDialog = settingsOpen ? (
     <SettingsDialog
       onClose={() => setSettingsOpen(false)}
@@ -230,7 +255,7 @@ function App(): React.JSX.Element {
           selected={selectedPath}
           onOpen={setSelectedPath}
           protectedPaths={(protection ?? project.protection).settings.protected}
-          onRowMenu={() => {}}
+          onRowMenu={(p, inProtected) => void onRowMenu(p, inProtected)}
         />
         <footer className="cb-tree-footer">
           <ThemePicker value={theme} onChange={setTheme} />

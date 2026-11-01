@@ -27,7 +27,8 @@ function stub(
   | 'newProjectDialog'
   | 'openProject'
   | 'getProjectProtection'
-  | 'setProtectedPaths',
+  | 'setProtectedPaths'
+  | 'showTreeMenu',
   Mock
 > {
   const info = { root: '/p', name: 'p', tree: [], protection: noProtection }
@@ -54,6 +55,7 @@ function stub(
     onChatEvent: vi.fn(() => () => {}),
     getProjectProtection: vi.fn().mockResolvedValue(noProtection),
     setProtectedPaths: vi.fn().mockResolvedValue(noProtection),
+    showTreeMenu: vi.fn().mockResolvedValue(true),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
       return () => {
@@ -393,4 +395,109 @@ it('an accepted change refreshes the tree and reloads the open file', async () =
   await waitFor(() => expect(page.querySelector('.ProseMirror')).toHaveTextContent('new idea'))
   expect(more.refreshTree.mock.calls.length).toBeGreaterThan(refreshesBefore)
   expect(more.writeDoc).not.toHaveBeenCalled()
+})
+
+const menuTree = [
+  { name: 'drafts', relPath: 'drafts', kind: 'folder' as const, children: [] as never[] },
+  {
+    name: 'notes',
+    relPath: 'notes',
+    kind: 'folder' as const,
+    children: [{ name: 'a.md', relPath: 'notes/a.md', kind: 'file' as const }]
+  }
+]
+const draftsProtected = {
+  ...noProtection,
+  settings: { version: 2 as const, protected: ['drafts'] }
+}
+
+function menuProject(): ReturnType<typeof stub> {
+  const api = stub('/p')
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: menuTree,
+    protection: draftsProtected
+  })
+  return api
+}
+
+const rightClick = async (region: 'Protected' | 'Project', name: string): Promise<void> => {
+  fireEvent.contextMenu(within(await screen.findByRole('region', { name: region })).getByText(name))
+}
+
+it('right-click protect saves', async () => {
+  const api = menuProject()
+  render(<App />)
+  await rightClick('Project', 'notes')
+  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', ['drafts', 'notes']))
+  expect(api.showTreeMenu).toHaveBeenCalledWith('protect')
+})
+
+it('stop protecting saves', async () => {
+  const api = menuProject()
+  render(<App />)
+  await rightClick('Protected', 'drafts')
+  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', []))
+  expect(api.showTreeMenu).toHaveBeenCalledWith('unprotect')
+})
+
+it('a dismissed menu writes nothing', async () => {
+  const api = menuProject()
+  api.showTreeMenu.mockResolvedValue(false)
+  render(<App />)
+  await rightClick('Project', 'notes')
+  await waitFor(() => expect(api.showTreeMenu).toHaveBeenCalled())
+  await act(async () => {})
+  expect(api.setProtectedPaths).not.toHaveBeenCalled()
+})
+
+it('a second action during a save is ignored', async () => {
+  const api = menuProject()
+  const d = deferred<typeof draftsProtected>()
+  api.setProtectedPaths.mockReturnValue(d.promise)
+  render(<App />)
+  await rightClick('Project', 'notes')
+  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledTimes(1))
+  await rightClick('Project', 'notes')
+  await act(async () => {})
+  expect(api.setProtectedPaths).toHaveBeenCalledTimes(1)
+  expect(api.showTreeMenu).toHaveBeenCalledTimes(1)
+  await act(async () => d.resolve(draftsProtected))
+})
+
+it('a failed save shows the app error and leaves the sections unchanged', async () => {
+  const api = menuProject()
+  api.setProtectedPaths.mockRejectedValue(new Error('disk full'))
+  render(<App />)
+  await rightClick('Project', 'notes')
+  expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
+  const prot = screen.getByRole('region', { name: 'Protected' })
+  expect(within(prot).getByText('drafts')).toBeInTheDocument()
+  expect(within(prot).queryByText('notes')).toBeNull()
+})
+
+it("protecting the open file's folder updates the banner", async () => {
+  const api = menuProject()
+  api.setProtectedPaths.mockResolvedValue({
+    ...noProtection,
+    settings: { version: 2, protected: ['notes'] }
+  })
+  Object.assign(api, {
+    readDoc: vi.fn().mockResolvedValue({ content: 'hello\n', mtimeMs: 1 }),
+    writeDoc: vi.fn(),
+    onFlushRequest: vi.fn(),
+    lintGrammar: vi.fn(async (texts: string[]) => texts.map(() => []))
+  })
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'a' }))
+  await waitFor(() =>
+    expect(screen.getByTestId('editor-panel').querySelector('.ProseMirror')).toHaveTextContent(
+      'hello'
+    )
+  )
+  expect(screen.queryByText("Protected — AI won't edit")).toBeNull()
+  await rightClick('Project', 'notes')
+  expect(await screen.findByText("Protected — AI won't edit")).toBeInTheDocument()
+  expect((api as unknown as Record<string, Mock>).writeDoc).not.toHaveBeenCalled()
 })
