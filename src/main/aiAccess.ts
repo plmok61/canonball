@@ -32,6 +32,10 @@ export interface AiAccess {
   /** Every .md file the AI can see, sorted by relPath. */
   list(): Promise<AiFile[]>
   read(relPath: string): Promise<DocFile>
+  /** Canonical path if write() would be allowed now; throws the same AccessDenied. Writes nothing. */
+  checkWrite(relPath: string): Promise<string>
+  /** Canonical path if create() would be allowed now (also refuses an existing file); writes nothing. */
+  checkCreate(relPath: string): Promise<string>
   /** Existing file only. */
   write(relPath: string, content: string): Promise<DocFile>
   /** New file only; never overwrites and makes no folders. */
@@ -134,6 +138,31 @@ export function createAiAccess(root: string): AiAccess {
     return { canonical, s }
   }
 
+  async function checkWrite(relPath: string): Promise<string> {
+    const { canonical, s } = await writable(relPath)
+    const a = effectiveAccess(s, canonical)
+    if (a === 'hidden') {
+      throw new AccessDenied(`The writer has hidden this file from the AI: ${relPath}`)
+    }
+    if (a !== 'edit') throw new AccessDenied(`The AI may only read this file: ${relPath}`)
+    if ((await kind(resolveInside(root, canonical))) !== 'file') throw notAvailable(relPath)
+    return canonical
+  }
+
+  async function checkCreate(relPath: string): Promise<string> {
+    const { canonical, s } = await writable(relPath)
+    const folder = canonical.includes('/') ? canonical.slice(0, canonical.lastIndexOf('/')) : ''
+    if (effectiveAccess(s, folder) !== 'edit') {
+      throw new AccessDenied(
+        `The AI may not create files in this folder: ${folder || "the project's top level"}`
+      )
+    }
+    const full = resolveInside(root, canonical)
+    if ((await kind(path.dirname(full))) !== 'folder') throw notAvailable(relPath)
+    if ((await kind(full)) !== null) throw new AccessDenied(`File already exists: ${relPath}`)
+    return canonical
+  }
+
   return {
     canonicalize,
 
@@ -158,27 +187,17 @@ export function createAiAccess(root: string): AiAccess {
       return readDoc(root, canonical)
     },
 
+    checkWrite,
+    checkCreate,
+
     async write(relPath, content) {
-      const { canonical, s } = await writable(relPath)
-      const a = effectiveAccess(s, canonical)
-      if (a === 'hidden') {
-        throw new AccessDenied(`The writer has hidden this file from the AI: ${relPath}`)
-      }
-      if (a !== 'edit') throw new AccessDenied(`The AI may only read this file: ${relPath}`)
-      if ((await kind(resolveInside(root, canonical))) !== 'file') throw notAvailable(relPath)
+      const canonical = await checkWrite(relPath)
       return writeDoc(root, canonical, content)
     },
 
     async create(relPath, content) {
-      const { canonical, s } = await writable(relPath)
-      const folder = canonical.includes('/') ? canonical.slice(0, canonical.lastIndexOf('/')) : ''
-      if (effectiveAccess(s, folder) !== 'edit') {
-        throw new AccessDenied(
-          `The AI may not create files in this folder: ${folder || "the project's top level"}`
-        )
-      }
+      const canonical = await checkCreate(relPath)
       const full = resolveInside(root, canonical)
-      if ((await kind(path.dirname(full))) !== 'folder') throw notAvailable(relPath)
       // Reserve the name exclusively so a file that appears meanwhile is never
       // overwritten, then fill it through the normal atomic write.
       try {
