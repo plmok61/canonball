@@ -279,6 +279,31 @@ describe('the AI never writes prose', () => {
     await expect(fs.access(path.join(root, 'drafts/chapters/ch2.md'))).rejects.toThrow()
   })
 
+  it("an ended session can't log into drafts", async () => {
+    const bodies: string[] = []
+    const fetchFn: FetchFn = async (_url, init) => {
+      bodies.push(init!.body as string)
+      if (bodies.length === 1) {
+        return toolTurn('openai', 'c0', 'create_note', {
+          path: 'drafts/chapters/session-1.md',
+          content: '# Session 1\n'
+        })
+      }
+      return textTurn('openai', 'Done.')
+    }
+    const chat = createChatService({
+      resolve: async () => CONFIG.openai,
+      fetch: fetchFn,
+      proposals
+    })
+    const c = collect()
+    chat.start({ ...request('openai'), session: { goal: 'the ship', phase: 'end' } }, root, c.send)
+    await c.ended
+    noProposals(c.events)
+    expect(bodies[1]).toContain(PROSE_ERROR)
+    await expect(fs.access(path.join(root, 'drafts/chapters/session-1.md'))).rejects.toThrow()
+  })
+
   it('a prose folder chosen by the writer is protected too', async () => {
     await setProsePaths(root, ['manuscript'])
     const { events, bodies } = await runCalls('openai', [

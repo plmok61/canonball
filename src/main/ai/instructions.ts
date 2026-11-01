@@ -52,6 +52,8 @@ export function buildInstructions(opts: {
   mode: 'tools' | 'fallback' | 'none'
   memory: MemoryFile[]
   files?: string
+  /** The brainstorm-session block; always last. */
+  session?: string
 }): string {
   const parts = [BASE_INSTRUCTIONS]
   if (opts.mode === 'tools') parts.push(TOOL_INSTRUCTIONS)
@@ -69,5 +71,6 @@ export function buildInstructions(opts: {
     )
   }
   if (opts.mode === 'fallback' && opts.files) parts.push(opts.files)
+  if (opts.session) parts.push(opts.session)
   return parts.join('\n\n')
 }

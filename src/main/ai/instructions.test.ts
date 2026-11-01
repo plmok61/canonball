@@ -98,6 +98,18 @@ describe('buildInstructions', () => {
     }
   })
 
+  it('appends the session block last', () => {
+    const text = buildInstructions({
+      mode: 'fallback',
+      memory: [{ relPath: 'memory/other.md', content: 'other' }],
+      files: '<file path="a.md">x</file>',
+      session: 'SESSION BLOCK'
+    })
+    expect(text.endsWith('\n\nSESSION BLOCK')).toBe(true)
+    expect(text.indexOf('SESSION BLOCK')).toBeGreaterThan(text.indexOf('<file path="a.md">'))
+    expect(buildInstructions({ mode: 'tools', memory: [] })).not.toContain('SESSION BLOCK')
+  })
+
   it('none mode says no project is open', () => {
     const text = buildInstructions({ mode: 'none', memory: [] })
     expect(text).toContain(BASE_INSTRUCTIONS)

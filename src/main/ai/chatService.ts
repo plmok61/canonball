@@ -15,6 +15,7 @@ import { errorText } from './aiConfig'
 import { ProviderError, rejectsTools } from './errors'
 import { createBlockFilter, packFiles, type FallbackBlock } from './fallback'
 import { buildInstructions, loadMemory, type MemoryFile } from './instructions'
+import { buildSessionBlock } from './sessions'
 import type { ProposalStore } from './proposals'
 import { adapterFor } from './providers'
 import { createToolRunner, FILE_TOOLS, type ToolRunner } from './tools'
@@ -50,7 +51,9 @@ export function createChatService(deps: {
   fetch: FetchFn
   proposals: ProposalStore
   access?: (root: string) => AiAccess
+  now?: () => Date
 }): ChatService {
+  const now = deps.now ?? ((): Date => new Date())
   const accessFor = deps.access ?? createAiAccess
   const active = new Map<string, Active>()
   /** `provider:model` pairs that rejected tool calling, for the rest of the app session. */
@@ -120,13 +123,34 @@ export function createChatService(deps: {
           proposals: deps.proposals,
           onProposal: (proposal) => emit({ requestId, kind: 'proposal', proposal })
         })
-        const fallback = (): Promise<void> =>
-          runFallback(root, access, memory, messages, runner, request, delta, signal)
+        const { settings } = await loadProjectAccess(root)
+        if (signal.aborted) return
+        const prose = (relPath: string): boolean => isProse(settings, relPath)
+        const sessionBlock = async (mode: 'tools' | 'fallback'): Promise<string | undefined> =>
+          req.session
+            ? buildSessionBlock({ access, session: req.session, mode, prose, now: now() })
+            : undefined
+        const fallback = async (): Promise<void> =>
+          runFallback(
+            access,
+            memory,
+            await sessionBlock('fallback'),
+            prose,
+            messages,
+            runner,
+            request,
+            delta,
+            signal
+          )
 
         if (noTools.has(key)) {
           await fallback()
         } else {
-          const system = buildInstructions({ mode: 'tools', memory })
+          const system = buildInstructions({
+            mode: 'tools',
+            memory,
+            session: await sessionBlock('tools')
+          })
           for (let round = 1; round <= MAX_TOOL_ROUNDS && !signal.aborted; round++) {
             let r: Round
             // Keep text from separate rounds apart; only once this round actually speaks.
@@ -213,9 +237,10 @@ export function createChatService(deps: {
  * of the reply and each becomes a proposal through the same tool validation, or a muted line.
  */
 async function runFallback(
-  root: string,
   access: AiAccess,
   memory: MemoryFile[],
+  session: string | undefined,
+  prose: (relPath: string) => boolean,
   messages: AiMessage[],
   runner: ToolRunner,
   request: (
@@ -227,9 +252,8 @@ async function runFallback(
   delta: (text: string) => void,
   signal: AbortSignal
 ): Promise<void> {
-  const { settings } = await loadProjectAccess(root)
-  const files = await packFiles(access, (relPath) => isProse(settings, relPath))
-  const system = buildInstructions({ mode: 'fallback', memory, files })
+  const files = await packFiles(access, prose)
+  const system = buildInstructions({ mode: 'fallback', memory, files, session })
   const filter = createBlockFilter()
   await request(system, messages, undefined, (text) => delta(filter.push(text)))
   // A cancelled reply makes no proposals from what it had written so far.

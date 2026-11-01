@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChatService, MAX_TOOL_ROUNDS } from './chatService'
 import { buildInstructions } from './instructions'
 import { ProviderError } from './errors'
+import { SESSION_STANCE } from './sessions'
 import { createProposalStore } from './proposals'
 import { createProject } from '../projectFs'
 import type { FetchFn, ProviderConfig } from './adapter'
@@ -457,6 +458,130 @@ describe('with a project', () => {
     )
     expect(c.events.at(-1)).toEqual({ requestId: 'r1', kind: 'done', stopped: false })
     expect(await disk('drafts/ch1.md')).toBe(CH1)
+  })
+
+  describe('brainstorm sessions', () => {
+    const sessionReq = (phase: 'brainstorm' | 'end', id = 'r1'): ChatRequest => ({
+      ...req(id),
+      session: { goal: 'the ship arrives', phase }
+    })
+    const NOW = new Date(2026, 9, 31, 12, 0, 0)
+    const sessionService = (
+      fetchFn: FetchFn,
+      proposals = createProposalStore()
+    ): ReturnType<typeof createChatService> =>
+      createChatService({
+        resolve: resolveLocal,
+        fetch: fetchFn,
+        proposals,
+        now: () => NOW
+      })
+    const system = (b: Body): string => b.messages[0].content ?? ''
+
+    it('a session request carries the stance, goal and canon', async () => {
+      const f = scripted([() => sse([delta('Ok.'), 'data: [DONE]\n\n'])])
+      const c = collect()
+      sessionService(f.fetch).start(sessionReq('brainstorm'), root, c.send)
+      await c.ended
+      expect(system(f.bodies[0])).toContain(SESSION_STANCE)
+      expect(system(f.bodies[0])).toContain("The writer's goal for this session: the ship arrives")
+      expect(system(f.bodies[0])).toContain('<file path="canon/')
+    })
+
+    it('a plain request has no session block', async () => {
+      const f = scripted([() => sse([delta('Ok.'), 'data: [DONE]\n\n'])])
+      const c = collect()
+      sessionService(f.fetch).start(req(), root, c.send)
+      await c.ended
+      expect(system(f.bodies[0])).not.toContain(SESSION_STANCE)
+      expect(system(f.bodies[0])).not.toContain("The writer's goal")
+    })
+
+    it('a session is ignored without a project', async () => {
+      const f = scripted([() => sse([delta('Ok.'), 'data: [DONE]\n\n'])])
+      const c = collect()
+      sessionService(f.fetch).start(sessionReq('brainstorm'), null, c.send)
+      await c.ended
+      expect(system(f.bodies[0])).toBe(buildInstructions({ mode: 'none', memory: [] }))
+    })
+
+    it('the end request names the log path and date', async () => {
+      const f = scripted([() => sse([delta('Ok.'), 'data: [DONE]\n\n'])])
+      const c = collect()
+      sessionService(f.fetch).start(sessionReq('end'), root, c.send)
+      await c.ended
+      expect(system(f.bodies[0])).toContain('sessions/session-1.md')
+      expect(system(f.bodies[0])).toContain('2026-10-31')
+    })
+
+    it('an end session produces a log card and one card per decision', async () => {
+      const proposals = createProposalStore()
+      const f = scripted([
+        () =>
+          sse(
+            toolCall('c1', 'create_note', {
+              path: 'sessions/session-1.md',
+              content: '# Session 1 — 2026-10-31\n'
+            })
+          ),
+        () =>
+          sse(
+            toolCall('c2', 'propose_edit', {
+              path: 'canon/characters.md',
+              edits: [{ old_text: '# Characters', new_text: '# Characters\n\nMara is a pilot.' }]
+            })
+          ),
+        () =>
+          sse(
+            toolCall('c3', 'propose_edit', {
+              path: 'canon/characters.md',
+              edits: [{ old_text: '# Characters', new_text: '# Characters\n\nOrin is a king.' }]
+            })
+          ),
+        () => sse([delta('Suggested three.'), 'data: [DONE]\n\n'])
+      ])
+      const before = await disk('canon/characters.md')
+      expect(before).toContain('# Characters')
+      const c = collect()
+      sessionService(f.fetch, proposals).start(sessionReq('end'), root, c.send)
+      await c.ended
+      const made = c.events.filter((e) => e.kind === 'proposal')
+      expect(made).toHaveLength(3)
+      await expect(fs.access(path.join(root, 'sessions/session-1.md'))).rejects.toThrow()
+      expect(await disk('canon/characters.md')).toBe(before)
+      for (const e of made) {
+        await proposals.apply(root, (e as Extract<ChatEvent, { kind: 'proposal' }>).proposal.id)
+      }
+      expect(await disk('sessions/session-1.md')).toContain('Session 1')
+      const after = await disk('canon/characters.md')
+      expect(after).toContain('Mara is a pilot.')
+      expect(after).toContain('Orin is a king.')
+    })
+
+    it('fallback sessions get the end rules in tag form', async () => {
+      const f = scripted([
+        () =>
+          new Response('{"error":{"message":"llama3 does not support tools"}}', { status: 400 }),
+        () => sse([delta('Ok.'), 'data: [DONE]\n\n'])
+      ])
+      const chat = sessionService(f.fetch)
+      const c = collect()
+      chat.start(sessionReq('end'), root, c.send)
+      await c.ended
+      const text = system(f.bodies[1])
+      expect(text).toContain(SESSION_STANCE)
+      expect(text).toContain('canonball-create tag')
+      expect(text).toContain('sessions/session-1.md')
+      expect(text).not.toContain('Use create_note for the log')
+      expect(text.indexOf('<file path=')).toBeLessThan(text.indexOf(SESSION_STANCE))
+
+      // Already known as no-tools: the first request goes straight to the fallback form.
+      const again = collect()
+      chat.start(sessionReq('end', 'r2'), root, again.send)
+      await again.ended
+      expect(f.bodies).toHaveLength(3)
+      expect(system(f.bodies[2])).toContain('canonball-create tag')
+    })
   })
 
   it('without a project no tools are offered', async () => {
