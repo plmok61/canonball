@@ -27,8 +27,8 @@ describe('packFiles', () => {
       'outline/o.md': { access: 'edit', content: 'out' }
     })
     const out = await packFiles(access, isProse)
+    expect(out).not.toContain('memory/m.md')
     const order = [
-      'memory/m.md',
       'canon/c.md',
       'notes/a.md',
       'outline/o.md',

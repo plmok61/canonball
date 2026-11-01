@@ -135,12 +135,28 @@ describe('google tools', () => {
     await collect(fetchFn, {})
     expect(bodies[0].tools).toEqual([
       {
-        functionDeclarations: [
-          { name: 'list_files', description: 'List files.', parameters: TOOL.parameters }
-        ]
+        functionDeclarations: [{ name: 'list_files', description: 'List files.' }]
       }
     ])
     expect(bodies[1]).not.toHaveProperty('tools')
+  })
+
+  it('omits parameters for a tool with no properties', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const fetchFn: FetchFn = async (_u, init) => {
+      bodies.push(JSON.parse(init!.body as string))
+      return sseResponse([])
+    }
+    const withProps = {
+      name: 'read_file',
+      description: 'Read.',
+      parameters: { type: 'object', properties: { path: { type: 'string' } } }
+    }
+    await collect(fetchFn, { tools: [TOOL, withProps] })
+    const decls = (bodies[0].tools as { functionDeclarations: Record<string, unknown>[] }[])[0]
+      .functionDeclarations
+    expect(decls[0]).not.toHaveProperty('parameters')
+    expect(decls[1].parameters).toEqual(withProps.parameters)
   })
 })
 

@@ -317,6 +317,30 @@ describe('with a project', () => {
   const textOf = (events: ChatEvent[]): string =>
     events.map((e) => (e.kind === 'delta' ? e.text : '')).join('')
 
+  it('separates text from different tool rounds', async () => {
+    const f = scripted([
+      () => sse([delta('Let me look.'), ...toolCall('c1', 'list_files', {})]),
+      () => sse([delta('Found it.'), 'data: [DONE]\n\n'])
+    ])
+    const chat = service(f.fetch)
+    const c = collect()
+    chat.start(req(), root, c.send)
+    await c.ended
+    expect(textOf(c.events)).toBe('Let me look.\n\nFound it.')
+  })
+
+  it('adds no separator when the new round says nothing', async () => {
+    const f = scripted([
+      () => sse([delta('Let me look.'), ...toolCall('c1', 'list_files', {})]),
+      () => sse(['data: [DONE]\n\n'])
+    ])
+    const chat = service(f.fetch)
+    const c = collect()
+    chat.start(req(), root, c.send)
+    await c.ended
+    expect(textOf(c.events)).toBe('Let me look.')
+  })
+
   it('runs read tools and answers', async () => {
     const f = scripted([
       () => sse(toolCall('c1', 'read_file', { path: 'notes/ideas.md' })),

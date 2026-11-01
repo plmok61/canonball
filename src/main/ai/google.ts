@@ -103,11 +103,15 @@ export const google: Adapter = {
     if (args.tools && args.tools.length > 0) {
       body.tools = [
         {
-          functionDeclarations: args.tools.map((t) => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters
-          }))
+          functionDeclarations: args.tools.map((t) => {
+            const props = (t.parameters as { properties?: Record<string, unknown> } | undefined)
+              ?.properties
+            const hasProps = props !== undefined && Object.keys(props).length > 0
+            // Gemini rejects an OBJECT schema with empty properties, so leave it out.
+            return hasProps
+              ? { name: t.name, description: t.description, parameters: t.parameters }
+              : { name: t.name, description: t.description }
+          })
         }
       ]
     }

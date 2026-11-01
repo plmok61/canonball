@@ -71,8 +71,11 @@ export function createChatService(deps: {
   ): Promise<void> {
     const { requestId, model } = req
     const signal = entry.controller.signal
+    let sent = ''
     const delta = (text: string): void => {
-      if (text !== '') emit({ requestId, kind: 'delta', text })
+      if (text === '') return
+      sent += text
+      emit({ requestId, kind: 'delta', text })
     }
     try {
       const cfg = await deps.resolve(model.provider)
@@ -126,8 +129,17 @@ export function createChatService(deps: {
           const system = buildInstructions({ mode: 'tools', memory })
           for (let round = 1; round <= MAX_TOOL_ROUNDS && !signal.aborted; round++) {
             let r: Round
+            // Keep text from separate rounds apart; only once this round actually speaks.
+            let separate = round > 1 && sent !== '' && !sent.endsWith('\n')
+            const roundDelta = (text: string): void => {
+              if (separate && text !== '') {
+                separate = false
+                delta('\n\n')
+              }
+              delta(text)
+            }
             try {
-              r = await request(system, messages, FILE_TOOLS, delta)
+              r = await request(system, messages, FILE_TOOLS, roundDelta)
             } catch (err) {
               // Only the first request can be the one that rejects tools; retry it once without.
               if (round !== 1 || !rejectsTools(err)) throw err

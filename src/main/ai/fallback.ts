@@ -8,7 +8,7 @@ import type { EditSpec } from './proposals'
 
 export const FALLBACK_BUDGET = 24_000
 
-const GROUP_ORDER = ['memory/', 'canon/', 'notes/', 'outline/', 'sessions/']
+const GROUP_ORDER = ['canon/', 'notes/', 'outline/', 'sessions/']
 
 function groupOf(relPath: string, prose: (relPath: string) => boolean): number {
   if (prose(relPath)) return GROUP_ORDER.length + 1
@@ -22,6 +22,7 @@ export async function packFiles(
   budget: number = FALLBACK_BUDGET
 ): Promise<string> {
   const files = (await access.list())
+    .filter((f) => !f.relPath.startsWith('memory/')) // already in the instructions
     .map((f) => ({ ...f, group: groupOf(f.relPath, prose) }))
     .sort((a, b) => a.group - b.group || (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0))
 
