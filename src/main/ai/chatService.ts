@@ -3,7 +3,7 @@ import { toAiMessages, type FetchFn } from './adapter'
 import type { AiConfig } from './aiConfig'
 import { errorText } from './aiConfig'
 import { ProviderError } from './errors'
-import { CHAT_INSTRUCTIONS } from './instructions'
+import { buildInstructions } from './instructions'
 import { adapterFor } from './providers'
 
 export interface ChatService {
@@ -40,7 +40,12 @@ export function createChatService(deps: {
       if (signal.aborted) return
       const stream = adapterFor(model.provider).streamChat(
         cfg,
-        { model: model.model, system: CHAT_INSTRUCTIONS, messages: toAiMessages(req.messages), signal },
+        {
+          model: model.model,
+          system: buildInstructions({ mode: 'none', memory: [] }),
+          messages: toAiMessages(req.messages),
+          signal
+        },
         deps.fetch
       )
       for await (const part of stream) {

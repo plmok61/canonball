@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createChatService } from './chatService'
-import { CHAT_INSTRUCTIONS } from './instructions'
+import { buildInstructions } from './instructions'
 import { ProviderError } from './errors'
 import type { FetchFn, ProviderConfig } from './adapter'
 import type { ChatEvent, ChatRequest } from '../../shared/ai'
@@ -64,7 +64,10 @@ it('streams deltas then done', async () => {
     { requestId: 'r1', kind: 'delta', text: 'lo' },
     { requestId: 'r1', kind: 'done', stopped: false }
   ])
-  expect(body!.messages[0]).toEqual({ role: 'system', content: CHAT_INSTRUCTIONS })
+  expect(body!.messages[0]).toEqual({
+    role: 'system',
+    content: buildInstructions({ mode: 'none', memory: [] })
+  })
 })
 
 it('cancel ends with done stopped:true and aborts the fetch signal', async () => {

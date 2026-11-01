@@ -80,7 +80,10 @@ export const google: Adapter = {
         if (typeof name !== 'string') continue
         const id = name.replace(/^models\//, '')
         if (!id.includes('gemini')) continue
-        if (!Array.isArray(supportedGenerationMethods) || !supportedGenerationMethods.includes('generateContent'))
+        if (
+          !Array.isArray(supportedGenerationMethods) ||
+          !supportedGenerationMethods.includes('generateContent')
+        )
           continue
         models.push({
           provider: cfg.provider,

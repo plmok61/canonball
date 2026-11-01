@@ -51,14 +51,22 @@ describe('anthropic tools', () => {
       sseResponse([
         ev({ type: 'message_start' }),
         ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
-        ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Checking.' } }),
+        ev({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Checking.' }
+        }),
         ev({ type: 'content_block_stop', index: 0 }),
         ev({
           type: 'content_block_start',
           index: 1,
           content_block: { type: 'tool_use', id: 'toolu_1', name: 'read_file', input: {} }
         }),
-        ev({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"pa' } }),
+        ev({
+          type: 'content_block_delta',
+          index: 1,
+          delta: { type: 'input_json_delta', partial_json: '{"pa' }
+        }),
         ev({
           type: 'content_block_delta',
           index: 1,
@@ -88,7 +96,11 @@ describe('anthropic tools', () => {
           index: 1,
           content_block: { type: 'tool_use', id: 't2', name: 'read_file', input: {} }
         }),
-        ev({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"pa' } }),
+        ev({
+          type: 'content_block_delta',
+          index: 1,
+          delta: { type: 'input_json_delta', partial_json: '{"pa' }
+        }),
         ev({ type: 'content_block_stop', index: 1 }),
         ev({ type: 'message_stop' })
       ])
@@ -169,10 +181,15 @@ describe('anthropic tools', () => {
       messages: [
         { role: 'user', content: 'x' },
         { role: 'assistant', content: '', toolCalls: [{ id: 't1', name: 'list_files', args: {} }] },
-        { role: 'tool', results: [{ callId: 't1', name: 'list_files', content: 'a.md', isError: false }] }
+        {
+          role: 'tool',
+          results: [{ callId: 't1', name: 'list_files', content: 'a.md', isError: false }]
+        }
       ]
     })
-    expect(body.messages[1].content).toEqual([{ type: 'tool_use', id: 't1', name: 'list_files', input: {} }])
+    expect(body.messages[1].content).toEqual([
+      { type: 'tool_use', id: 't1', name: 'list_files', input: {} }
+    ])
   })
 })
 

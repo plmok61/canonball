@@ -18,7 +18,11 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status })
 }
 
-const cfg: ProviderConfig = { provider: 'openai', apiKey: 'sk-test', baseUrl: 'https://api.openai.com/v1' }
+const cfg: ProviderConfig = {
+  provider: 'openai',
+  apiKey: 'sk-test',
+  baseUrl: 'https://api.openai.com/v1'
+}
 
 function data(obj: unknown): string {
   return `data: ${JSON.stringify(obj)}\n\n`
@@ -99,13 +103,22 @@ describe('openaiCompat', () => {
             {
               delta: {
                 tool_calls: [
-                  { index: 0, id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"pa' } }
+                  {
+                    index: 0,
+                    id: 'c1',
+                    type: 'function',
+                    function: { name: 'read_file', arguments: '{"pa' }
+                  }
                 ]
               }
             }
           ]
         }),
-        data({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'th":"a.md"}' } }] } }] }),
+        data({
+          choices: [
+            { delta: { tool_calls: [{ index: 0, function: { arguments: 'th":"a.md"}' } }] } }
+          ]
+        }),
         data({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
         'data: [DONE]\n\n'
       ])
@@ -146,15 +159,28 @@ describe('openaiCompat', () => {
       tools: [TOOL],
       messages: [
         { role: 'user', content: 'Read a' },
-        { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read_file', args: { path: 'a.md' } }] },
-        { role: 'tool', results: [{ callId: 'c1', name: 'read_file', content: 'A text', isError: false }] }
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'read_file', args: { path: 'a.md' } }]
+        },
+        {
+          role: 'tool',
+          results: [{ callId: 'c1', name: 'read_file', content: 'A text', isError: false }]
+        }
       ]
     })
     expect(body.messages).toHaveLength(4)
     expect(body.messages[2]).toEqual({
       role: 'assistant',
       content: null,
-      tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.md"}' } }]
+      tool_calls: [
+        {
+          id: 'c1',
+          type: 'function',
+          function: { name: 'read_file', arguments: '{"path":"a.md"}' }
+        }
+      ]
     })
     expect(body.messages[3]).toEqual({ role: 'tool', tool_call_id: 'c1', content: 'A text' })
   })
@@ -188,10 +214,19 @@ describe('openaiCompat', () => {
       headers = init!.headers as Record<string, string>
       return sseResponse(['data: [DONE]\n\n'])
     }
-    const local: ProviderConfig = { provider: 'local', apiKey: null, baseUrl: 'http://localhost:11434/v1' }
+    const local: ProviderConfig = {
+      provider: 'local',
+      apiKey: null,
+      baseUrl: 'http://localhost:11434/v1'
+    }
     for await (const t of openaiCompat.streamChat(
       local,
-      { model: 'm', system: '', messages: [{ role: 'user', content: 'x' }], signal: new AbortController().signal },
+      {
+        model: 'm',
+        system: '',
+        messages: [{ role: 'user', content: 'x' }],
+        signal: new AbortController().signal
+      },
       fetchFn
     ))
       void t
@@ -218,8 +253,13 @@ describe('openaiCompat', () => {
   })
 
   it('lists every local model', async () => {
-    const fetchFn: FetchFn = async () => json({ data: [{ id: 'llama3' }, { id: 'text-embedding-x' }] })
-    const local: ProviderConfig = { provider: 'local', apiKey: null, baseUrl: 'http://localhost:11434/v1' }
+    const fetchFn: FetchFn = async () =>
+      json({ data: [{ id: 'llama3' }, { id: 'text-embedding-x' }] })
+    const local: ProviderConfig = {
+      provider: 'local',
+      apiKey: null,
+      baseUrl: 'http://localhost:11434/v1'
+    }
     const models = await openaiCompat.listModels(local, fetchFn)
     expect(models.map((m) => m.model)).toEqual(['llama3', 'text-embedding-x'])
     expect(models.every((m) => m.provider === 'local')).toBe(true)
@@ -232,7 +272,12 @@ describe('openaiCompat', () => {
       (async () => {
         for await (const t of openaiCompat.streamChat(
           cfg,
-          { model: 'm', system: '', messages: [{ role: 'user', content: 'x' }], signal: new AbortController().signal },
+          {
+            model: 'm',
+            system: '',
+            messages: [{ role: 'user', content: 'x' }],
+            signal: new AbortController().signal
+          },
           fetchFn
         ))
           void t

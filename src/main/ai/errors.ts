@@ -25,7 +25,9 @@ export function rejectsTools(err: unknown): boolean {
 }
 
 function isAbort(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError'
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError'
+  )
 }
 
 export function httpError(provider: ProviderId, status: number, body: string): ProviderError {
@@ -35,7 +37,10 @@ export function httpError(provider: ProviderId, status: number, body: string): P
   if (status === 401 || status === 403 || badGoogleKey)
     return new ProviderError(`The ${label} API key was rejected. Check it in Settings.`, http)
   if (status === 429)
-    return new ProviderError(`${label} is busy or rate-limiting requests. Try again in a moment.`, http)
+    return new ProviderError(
+      `${label} is busy or rate-limiting requests. Try again in a moment.`,
+      http
+    )
   let message = body.slice(0, 200)
   try {
     const parsed: unknown = JSON.parse(body)
@@ -51,5 +56,7 @@ export function networkError(provider: ProviderId, err: unknown, baseUrl?: strin
   if (isAbort(err)) throw err
   if (provider === 'local')
     return new ProviderError(`Couldn't reach the local server at ${baseUrl ?? ''}. Is it running?`)
-  return new ProviderError(`Couldn't reach ${PROVIDER_LABEL[provider]}. Check your internet connection.`)
+  return new ProviderError(
+    `Couldn't reach ${PROVIDER_LABEL[provider]}. Check your internet connection.`
+  )
 }

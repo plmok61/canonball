@@ -33,7 +33,10 @@ describe('parseSse', () => {
   it('joins multi-line data and ignores comments', async () => {
     const enc = new TextEncoder()
     const events = await collect(
-      streamOf([enc.encode(': hi\ndata: one\ndata: two\n\ndata: three\r\r'), enc.encode('data: four\n\n')])
+      streamOf([
+        enc.encode(': hi\ndata: one\ndata: two\n\ndata: three\r\r'),
+        enc.encode('data: four\n\n')
+      ])
     )
     expect(events).toEqual([
       { event: null, data: 'one\ntwo' },

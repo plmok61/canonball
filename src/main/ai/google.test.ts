@@ -51,10 +51,17 @@ describe('google tools', () => {
     const part = { functionCall: { name: 'list_files', args: {} }, thoughtSignature: 'sig' }
     const fetchFn: FetchFn = async () =>
       sseResponse([
-        data({ candidates: [{ content: { role: 'model', parts: [{ text: 'Let me look.' }, part] } }] }),
+        data({
+          candidates: [{ content: { role: 'model', parts: [{ text: 'Let me look.' }, part] } }]
+        }),
         data({
           candidates: [
-            { content: { role: 'model', parts: [{ functionCall: { name: 'read_file', args: 'bad' } }] } }
+            {
+              content: {
+                role: 'model',
+                parts: [{ functionCall: { name: 'read_file', args: 'bad' } }]
+              }
+            }
           ]
         })
       ])
@@ -84,9 +91,21 @@ describe('google tools', () => {
       messages: [
         { role: 'user', content: 'What is there?' },
         { role: 'assistant', content: 'Let me look.', toolCalls: [call] },
-        { role: 'tool', results: [{ callId: call.id, name: 'list_files', content: 'a.md (can edit)', isError: false }] },
-        { role: 'assistant', content: '', toolCalls: [{ id: 'call_9', name: 'read_file', args: { path: 'z' } }] },
-        { role: 'tool', results: [{ callId: 'call_9', name: 'read_file', content: 'Nope', isError: true }] }
+        {
+          role: 'tool',
+          results: [
+            { callId: call.id, name: 'list_files', content: 'a.md (can edit)', isError: false }
+          ]
+        },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call_9', name: 'read_file', args: { path: 'z' } }]
+        },
+        {
+          role: 'tool',
+          results: [{ callId: 'call_9', name: 'read_file', content: 'Nope', isError: true }]
+        }
       ]
     })
     expect(body.contents).toEqual([
@@ -94,10 +113,15 @@ describe('google tools', () => {
       { role: 'model', parts: [{ text: 'Let me look.' }, part] },
       {
         role: 'user',
-        parts: [{ functionResponse: { name: 'list_files', response: { content: 'a.md (can edit)' } } }]
+        parts: [
+          { functionResponse: { name: 'list_files', response: { content: 'a.md (can edit)' } } }
+        ]
       },
       { role: 'model', parts: [{ functionCall: { name: 'read_file', args: { path: 'z' } } }] },
-      { role: 'user', parts: [{ functionResponse: { name: 'read_file', response: { error: 'Nope' } } }] }
+      {
+        role: 'user',
+        parts: [{ functionResponse: { name: 'read_file', response: { error: 'Nope' } } }]
+      }
     ])
   })
 
@@ -110,7 +134,11 @@ describe('google tools', () => {
     await collect(fetchFn, { tools: [TOOL] })
     await collect(fetchFn, {})
     expect(bodies[0].tools).toEqual([
-      { functionDeclarations: [{ name: 'list_files', description: 'List files.', parameters: TOOL.parameters }] }
+      {
+        functionDeclarations: [
+          { name: 'list_files', description: 'List files.', parameters: TOOL.parameters }
+        ]
+      }
     ])
     expect(bodies[1]).not.toHaveProperty('tools')
   })
@@ -166,14 +194,26 @@ describe('google', () => {
       return new Response(
         JSON.stringify({
           models: [
-            { name: 'models/gemini-b', displayName: 'Gemini B', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/embedding-001', displayName: 'Embedding', supportedGenerationMethods: ['embedContent'] },
+            {
+              name: 'models/gemini-b',
+              displayName: 'Gemini B',
+              supportedGenerationMethods: ['generateContent']
+            },
+            {
+              name: 'models/embedding-001',
+              displayName: 'Embedding',
+              supportedGenerationMethods: ['embedContent']
+            },
             {
               name: 'models/gemini-a',
               displayName: 'Gemini A',
               supportedGenerationMethods: ['generateContent', 'countTokens']
             },
-            { name: 'models/gemini-embed', displayName: 'Gemini Embed', supportedGenerationMethods: ['embedContent'] }
+            {
+              name: 'models/gemini-embed',
+              displayName: 'Gemini Embed',
+              supportedGenerationMethods: ['embedContent']
+            }
           ]
         })
       )

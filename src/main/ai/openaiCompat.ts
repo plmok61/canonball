@@ -139,7 +139,8 @@ function toWire(messages: AiMessage[]): Record<string, unknown>[] {
         out.push({ role: 'assistant', content: m.content })
       }
     } else {
-      for (const r of m.results) out.push({ role: 'tool', tool_call_id: r.callId, content: r.content })
+      for (const r of m.results)
+        out.push({ role: 'tool', tool_call_id: r.callId, content: r.content })
     }
   }
   return out
