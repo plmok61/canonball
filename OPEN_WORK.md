@@ -33,6 +33,7 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
   - `aiAccess` canonicalizes before checking, then writes; a symlink swapped in between by another local process could redirect a write (still inside the project). `create` through a dangling symlink into a protected folder is refused only by the exclusive create (`File already exists`); consider refusing symlinks in the tail segment.
   - The renderer matches protected entries literally; main also matches their on-disk spelling. A hand-edited `"DRAFTS"` gets main's protection but no Protected section entry or "Protected — AI won't edit" banner.
   - Saving `project.json` drops unknown top-level keys.
+  - Protect dialog: focus drops when Done disables mid-save.
 - Phase 4 (AI connection & chat):
   - Adapters live in `src/main/ai/`: `openaiCompat.ts` (OpenAI and the local server), `anthropic.ts`, `google.ts`, picked by `providers.ts` `adapterFor`. They share `http.ts` (`send`), `sse.ts` (`parseSse`) and `errors.ts` (`ProviderError` copy). They use plain `fetch` from main with no SDKs. Phase 5 adds tool calling per adapter.
   - `aiConfig.resolve(provider)` (`src/main/ai/aiConfig.ts`) is the only place a key is read for a request. Keys are encrypted with `safeStorage` in `<userData>/secrets.json` (`secrets.ts`), and the renderer only sees booleans.
