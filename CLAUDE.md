@@ -22,6 +22,7 @@ Electron + React + TypeScript, built with electron-vite. Editor: TipTap (free, o
 - New-project scaffold copied for each new writer project: `template/` (`canon/`, `notes/`, `outline/`, `drafts/`, `sessions/`, `memory/`)
 - AI-isms reference material: `docs/reference/`
 - `examples/` holds sample material; leave it alone.
+- Unattended phase runner: `scripts/run-phases.sh` (logs in `.overnight/`, parked questions in `NEEDS_INPUT.md`). Review a run with the `review-overnight-run` skill.
 
 ## Hard rules
 
