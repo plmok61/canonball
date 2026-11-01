@@ -14,8 +14,10 @@ interface Props {
   summaries: ChatSummary[]
   threadValue: string
   busy: boolean
+  canStartSession: boolean
   onChooseModel(value: string): void
   onChooseThread(id: string): void
+  onStartSession(): void
   onOpenSettings(): void
 }
 
@@ -29,8 +31,10 @@ export function ChatHeader({
   summaries,
   threadValue,
   busy,
+  canStartSession,
   onChooseModel,
   onChooseThread,
+  onStartSession,
   onOpenSettings
 }: Props): React.JSX.Element {
   const chosen = status?.model ?? null
@@ -87,6 +91,16 @@ export function ChatHeader({
             <option value="">New chat</option>
           </select>
         </div>
+        <button
+          type="button"
+          className="cb-chat-brainstorm"
+          aria-label="Start a brainstorm session"
+          title="Start a brainstorm session"
+          disabled={!canStartSession}
+          onClick={onStartSession}
+        >
+          Brainstorm
+        </button>
         <button
           type="button"
           className="cb-chat-gear"

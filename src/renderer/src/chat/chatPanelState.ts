@@ -12,6 +12,18 @@ export interface View {
   saved: boolean
 }
 
+/** An empty thread that exists only in memory until its first save. */
+export function newThread(title: string, now: string): ChatThread {
+  return {
+    version: 1,
+    id: crypto.randomUUID(),
+    title,
+    createdAt: now,
+    updatedAt: now,
+    messages: []
+  }
+}
+
 export function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }

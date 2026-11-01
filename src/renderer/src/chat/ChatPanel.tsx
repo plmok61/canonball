@@ -11,10 +11,13 @@ import {
 } from '../../../shared/ai'
 import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
-import { hasConnection, message, parseChoice, type View } from './chatPanelState'
+import { hasConnection, message, newThread, parseChoice, type View } from './chatPanelState'
 import { ChatLog } from './ChatLog'
 import { ProposalCard } from './ProposalCard'
+import { SessionBanner } from './SessionBanner'
+import { SessionStart } from './SessionStart'
 import { useProposals } from './useProposals'
+import { brainstormRequest, useSession, type SendMessage } from './useSession'
 import './chat.css'
 
 interface Props {
@@ -51,6 +54,8 @@ export function ChatPanel({
   const saveChain = useRef<Promise<void>>(Promise.resolve())
   const loadToken = useRef(0)
   const sentAt = useRef(0)
+  /** Runs when the active reply finishes cleanly. */
+  const onDoneRef = useRef<(() => void) | null>(null)
 
   const commit = (next: View): void => {
     viewRef.current = next
@@ -81,6 +86,8 @@ export function ChatPanel({
   const finish = (requestId: string, failure: string | null, stopped = false): void => {
     if (activeRef.current !== requestId) return
     activeRef.current = null
+    const onDone = onDoneRef.current
+    onDoneRef.current = null
     setStreaming(null)
     const { thread } = viewRef.current
     if (!thread) return
@@ -94,6 +101,7 @@ export function ChatPanel({
     if (failure !== null) addError(failure)
     else if (empty && !stopped) addError(NO_REPLY)
     save(done)
+    if (failure === null && !stopped && !empty) onDone?.()
   }
 
   /** Changes the streaming reply, reading the latest view so concurrent updates are kept. */
@@ -189,16 +197,11 @@ export function ChatPanel({
     }
   }, [aiVersion])
 
-  const proposals = useProposals({
-    root,
-    viewRef,
-    alive,
-    onFileChanged,
-    update: (thread) => {
-      commit({ ...viewRef.current, thread })
-      save(thread)
-    }
-  })
+  const update = (thread: ChatThread): void => {
+    commit({ ...viewRef.current, thread })
+    save(thread)
+  }
+  const proposals = useProposals({ root, viewRef, alive, onFileChanged, update })
 
   const messages = view.thread?.messages ?? []
 
@@ -230,6 +233,7 @@ export function ChatPanel({
 
   const chooseThread = (id: string): void => {
     if (activeRef.current) return
+    session.closeStart()
     setError(null)
     const token = ++loadToken.current
     if (id === '') {
@@ -251,20 +255,14 @@ export function ChatPanel({
       })
   }
 
-  const canSend = !busy && !loading && chosen !== null && input.trim() !== ''
+  const ready = !busy && !loading && chosen !== null
+  const canSend = ready && input.trim() !== ''
 
-  const send = (): void => {
-    if (!canSend || !chosen || activeRef.current) return
-    const text = input
+  /** Sends one user message. `opts.thread` replaces the open thread (a new session). */
+  const sendMessage: SendMessage = (text, opts = {}) => {
+    if (!ready || !chosen || activeRef.current || text.trim() === '') return
     const now = new Date().toISOString()
-    const base: ChatThread = viewRef.current.thread ?? {
-      version: 1,
-      id: crypto.randomUUID(),
-      title: chatTitle(text),
-      createdAt: now,
-      updatedAt: now,
-      messages: []
-    }
+    const base = opts.thread ?? viewRef.current.thread ?? newThread(chatTitle(text), now)
     const userMsg: ChatMessage = { role: 'user', content: text, at: now }
     const withUser: ChatThread = { ...base, updatedAt: now, messages: [...base.messages, userMsg] }
     // Turns are taken before the empty reply is added: the last turn must be the writer's.
@@ -273,19 +271,28 @@ export function ChatPanel({
     const requestId = crypto.randomUUID()
 
     setError(null)
-    setInput('')
-    commit({
-      ...viewRef.current,
-      thread: { ...withUser, messages: [...withUser.messages, reply] }
-    })
+    // A new session thread wins over any thread still loading.
+    if (opts.thread) ++loadToken.current
+    const shown = { ...withUser, messages: [...withUser.messages, reply] }
+    commit(opts.thread ? { thread: shown, saved: false } : { ...viewRef.current, thread: shown })
     activeRef.current = requestId
+    onDoneRef.current = opts.onDone ?? null
     sentAt.current = Date.now()
     setStreaming(requestId)
     save(withUser)
+    const request = { requestId, model: chosen, messages: turns }
     window.canonball
-      .startChat({ requestId, model: chosen, messages: turns })
+      .startChat(opts.session ? { ...request, session: opts.session } : request)
       .catch((e) => finish(requestId, message(e)))
   }
+
+  const send = (): void => {
+    if (!canSend) return
+    sendMessage(input, { session: brainstormRequest(viewRef.current.thread) })
+    setInput('')
+  }
+
+  const session = useSession({ viewRef, sendMessage, update })
 
   const stop = (): void => {
     const id = activeRef.current
@@ -305,10 +312,15 @@ export function ChatPanel({
         summaries={summaries}
         threadValue={threadValue}
         busy={busy}
+        canStartSession={!busy && chosen !== null}
         onChooseModel={chooseModel}
         onChooseThread={chooseThread}
+        onStartSession={session.openStart}
         onOpenSettings={onOpenSettings}
       />
+      {view.thread?.session && (
+        <SessionBanner session={view.thread.session} busy={busy} onEnd={session.end} />
+      )}
       <ChatLog
         messages={messages}
         busy={busy}
@@ -321,14 +333,18 @@ export function ChatPanel({
           {error}
         </p>
       )}
-      <ChatComposer
-        input={input}
-        busy={busy}
-        canSend={canSend}
-        onInput={setInput}
-        onSend={send}
-        onStop={stop}
-      />
+      {session.starting ? (
+        <SessionStart canStart={ready} onStart={session.start} onCancel={session.closeStart} />
+      ) : (
+        <ChatComposer
+          input={input}
+          busy={busy}
+          canSend={canSend}
+          onInput={setInput}
+          onSend={send}
+          onStop={stop}
+        />
+      )}
     </div>
   )
 }

@@ -5,13 +5,14 @@ import '@testing-library/jest-dom/vitest'
 import { ChatPanel } from './ChatPanel'
 import { flushAll } from '../editor/saveRegistry'
 import { CHANGED_SINCE_PROPOSAL, type Proposal } from '../../../shared/proposals'
-import type {
-  AiStatus,
-  ChatEvent,
-  ChatRequest,
-  ChatSummary,
-  ChatThread,
-  ModelList
+import {
+  END_SESSION_MESSAGE,
+  type AiStatus,
+  type ChatEvent,
+  type ChatRequest,
+  type ChatSummary,
+  type ChatThread,
+  type ModelList
 } from '../../../shared/ai'
 
 const status = (over: Partial<AiStatus> = {}): AiStatus => ({
@@ -644,4 +645,169 @@ it('the next message tells the model what was accepted', async () => {
     },
     { role: 'user', content: 'thanks' }
   ])
+})
+
+const ENDED_AT = '2026-10-03T00:00:00.000Z'
+const sessionThread = (endedAt?: string): ChatThread => ({
+  version: 1,
+  id: '33333333-3333-4333-8333-333333333333',
+  title: 'Brainstorm: the ship',
+  createdAt: '2026-10-03T00:00:00.000Z',
+  updatedAt: '2026-10-03T00:00:00.000Z',
+  messages: [
+    { role: 'user', content: 'the ship', at: '2026-10-03T00:00:00.000Z' },
+    { role: 'assistant', content: 'Which ship?', at: '2026-10-03T00:00:01.000Z' }
+  ],
+  session: endedAt ? { goal: 'the ship', endedAt } : { goal: 'the ship' }
+})
+
+function stubSession(endedAt?: string): Api {
+  const t = sessionThread(endedAt)
+  return stub({
+    chats: [{ id: t.id, title: t.title, updatedAt: t.updatedAt }],
+    threads: { [t.id]: t }
+  })
+}
+
+const banner = (): HTMLElement => screen.getByRole('status')
+
+async function startSession(api: Api, goal: string): Promise<ChatRequest> {
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-a'))
+  const button = screen.getByRole('button', { name: 'Start a brainstorm session' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+  const form = screen.getByRole('form', { name: 'Start a brainstorm session' })
+  expect(screen.queryByLabelText('Message')).toBeNull()
+  fireEvent.change(within(form).getByLabelText('What do you want to figure out?'), {
+    target: { value: goal }
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Start session' }))
+  await waitFor(() => expect(api.startChat).toHaveBeenCalledTimes(1))
+  return api.startChat.mock.calls[0][0] as ChatRequest
+}
+
+/** Opens the saved session thread and presses End session. */
+async function endSession(api: Api): Promise<ChatRequest> {
+  await screen.findByText('Which ship?')
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-a'))
+  fireEvent.click(within(banner()).getByRole('button', { name: 'End session' }))
+  await waitFor(() => expect(api.startChat).toHaveBeenCalledTimes(1))
+  return api.startChat.mock.calls[0][0] as ChatRequest
+}
+
+it('starting a session sends the goal with the session field', async () => {
+  const api = stub({ chats: summaries, threads: { [older.id]: older, [newest.id]: newest } })
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await screen.findByText('new question')
+  const req = await startSession(api, '  the ship  ')
+  expect(req.session).toEqual({ goal: 'the ship', phase: 'brainstorm' })
+  expect(req.messages).toEqual([{ role: 'user', content: 'the ship' }])
+  expect(screen.queryByRole('form')).toBeNull()
+  expect(screen.getByLabelText('Message')).toBeInTheDocument()
+  await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(1))
+  const saved = savedThreads(api)[0]
+  expect(saved.id).not.toBe(newest.id)
+  expect(saved.title).toBe('Brainstorm: the ship')
+  expect(saved.session).toEqual({ goal: 'the ship' })
+  expect(banner()).toHaveTextContent('Brainstorm: the ship')
+  expect(within(screen.getByRole('log')).queryByText('new question')).toBeNull()
+})
+
+it('Cancel closes the form and keeps the thread', async () => {
+  const api = stub({ chats: summaries, threads: { [older.id]: older, [newest.id]: newest } })
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await screen.findByText('new question')
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-a'))
+  fireEvent.click(screen.getByRole('button', { name: 'Start a brainstorm session' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByRole('form')).toBeNull()
+  expect(screen.getByLabelText('Message')).toBeInTheDocument()
+  expect(screen.getByText('new question')).toBeInTheDocument()
+  expect(api.startChat).not.toHaveBeenCalled()
+})
+
+it('picking another thread closes the form', async () => {
+  stub({ chats: summaries, threads: { [older.id]: older, [newest.id]: newest } })
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await screen.findByText('new question')
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-a'))
+  fireEvent.click(screen.getByRole('button', { name: 'Start a brainstorm session' }))
+  fireEvent.change(screen.getByLabelText('Chat'), { target: { value: older.id } })
+  expect(await screen.findByText('old question')).toBeInTheDocument()
+  expect(screen.queryByRole('form')).toBeNull()
+  expect(screen.getByLabelText('Message')).toBeInTheDocument()
+})
+
+it('messages in an open session carry the brainstorm phase', async () => {
+  const api = stubSession()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await screen.findByText('Which ship?')
+  const req = await sendMessage(api, 'a freighter')
+  expect(req.session).toEqual({ goal: 'the ship', phase: 'brainstorm' })
+})
+
+it('ending a session sends the end message and marks it ended', async () => {
+  const api = stubSession()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  const req = await endSession(api)
+  expect(req.session).toEqual({ goal: 'the ship', phase: 'end' })
+  expect(req.messages.at(-1)).toEqual({ role: 'user', content: END_SESSION_MESSAGE })
+  expect(within(banner()).getByRole('button', { name: 'End session' })).toBeDisabled()
+  fire({ requestId: req.requestId, kind: 'delta', text: 'Here is the log.' })
+  fire({ requestId: req.requestId, kind: 'done', stopped: false })
+  await waitFor(() =>
+    expect(savedThreads(api).at(-1)?.session?.endedAt).toEqual(expect.any(String))
+  )
+  expect(savedThreads(api).at(-1)?.messages.at(-1)?.content).toBe('Here is the log.')
+  expect(banner()).toHaveTextContent('Brainstorm: the ship · Ended')
+  expect(within(banner()).queryByRole('button')).toBeNull()
+})
+
+it('a failed end keeps the session open', async () => {
+  const api = stubSession()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  const req = await endSession(api)
+  fire({ requestId: req.requestId, kind: 'error', message: 'Couldn’t reach OpenAI.' })
+  await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(2))
+  expect(savedThreads(api).every((t) => t.session?.endedAt === undefined)).toBe(true)
+  expect(banner()).not.toHaveTextContent('Ended')
+  expect(within(banner()).getByRole('button', { name: 'End session' })).toBeEnabled()
+})
+
+it('a stopped end keeps the session open', async () => {
+  const api = stubSession()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  const req = await endSession(api)
+  fire({ requestId: req.requestId, kind: 'delta', text: 'Half a log' })
+  fire({ requestId: req.requestId, kind: 'done', stopped: true })
+  await waitFor(() => expect(api.saveChat).toHaveBeenCalledTimes(2))
+  expect(savedThreads(api).every((t) => t.session?.endedAt === undefined)).toBe(true)
+  expect(within(banner()).getByRole('button', { name: 'End session' })).toBeEnabled()
+})
+
+it('an ended session sends plain messages', async () => {
+  const api = stubSession(ENDED_AT)
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await screen.findByText('Which ship?')
+  expect(banner()).toHaveTextContent('Brainstorm: the ship · Ended')
+  const req = await sendMessage(api, 'one more thing')
+  expect('session' in req).toBe(false)
+})
+
+it('Brainstorm is disabled while a reply streams', async () => {
+  const api = stub()
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  const button = await screen.findByRole('button', { name: 'Start a brainstorm session' })
+  const req = await sendMessage(api, 'hi')
+  expect(button).toBeDisabled()
+  fire({ requestId: req.requestId, kind: 'delta', text: 'Hello' })
+  fire({ requestId: req.requestId, kind: 'done', stopped: false })
+  expect(button).toBeEnabled()
+})
+
+it('Brainstorm is disabled when no model is chosen', async () => {
+  stub({ status: status({ model: null }) })
+  render(<ChatPanel root="/p" aiVersion={0} onOpenSettings={vi.fn()} onFileChanged={vi.fn()} />)
+  await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue(''))
+  expect(screen.getByRole('button', { name: 'Start a brainstorm session' })).toBeDisabled()
 })
