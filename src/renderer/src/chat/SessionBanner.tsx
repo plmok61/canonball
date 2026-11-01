@@ -2,11 +2,11 @@ import type { ChatSession } from '../../../shared/ai'
 
 interface Props {
   session: ChatSession
-  busy: boolean
+  canEnd: boolean
   onEnd(): void
 }
 
-export function SessionBanner({ session, busy, onEnd }: Props): React.JSX.Element {
+export function SessionBanner({ session, canEnd, onEnd }: Props): React.JSX.Element {
   const ended = session.endedAt !== undefined
   return (
     <div role="status" className="cb-session-banner">
@@ -15,7 +15,7 @@ export function SessionBanner({ session, busy, onEnd }: Props): React.JSX.Elemen
         {ended && <span className="cb-session-ended"> · Ended</span>}
       </span>
       {!ended && (
-        <button type="button" disabled={busy} onClick={onEnd}>
+        <button type="button" disabled={!canEnd} onClick={onEnd}>
           End session
         </button>
       )}

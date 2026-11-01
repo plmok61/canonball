@@ -193,7 +193,8 @@ export function parseChatThread(x: unknown): ChatThread | null {
   }
   if (x.session !== undefined) {
     const s = x.session
-    if (!isRecord(s) || typeof s.goal !== 'string' || s.goal === '') return null
+    if (!isRecord(s) || typeof s.goal !== 'string') return null
+    if (s.goal.trim() === '' || s.goal.length > SESSION_GOAL_MAX) return null
     if (s.endedAt !== undefined && typeof s.endedAt !== 'string') return null
     thread.session = { goal: s.goal }
     if (s.endedAt !== undefined) thread.session.endedAt = s.endedAt

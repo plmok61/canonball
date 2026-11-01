@@ -8,7 +8,7 @@ import type { AiAccess } from '../aiAccess'
 import { FALLBACK_BUDGET, packFiles } from './fallback'
 
 export const SESSION_STANCE =
-  "This is a brainstorm session. Open doors rather than closing them. Offer several directions, argue for the ones you find most interesting and say why. Ask questions that make the writer commit to a choice. Don't resolve things before the writer does, and don't treat an idea as settled until the writer says it is. You have already read the canon and notes included below, so build on them, and point out when an idea contradicts them."
+  "This is a brainstorm session. Open doors rather than closing them. Offer several directions, argue for the ones you find most interesting and say why. Ask questions that make the writer commit to a choice. Don't resolve things before the writer does, and don't treat an idea as settled until the writer says it is. You have already read the canon and notes included in these instructions, so build on them, and point out when an idea contradicts them."
 
 export const BUILTIN_SESSION_TEMPLATE = `# Session [N] — [Date]
 

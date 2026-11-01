@@ -8,7 +8,7 @@ afterEach(cleanup)
 
 it('shows the goal and End session', () => {
   const onEnd = vi.fn()
-  render(<SessionBanner session={{ goal: 'the ship' }} busy={false} onEnd={onEnd} />)
+  render(<SessionBanner session={{ goal: 'the ship' }} canEnd onEnd={onEnd} />)
   const banner = screen.getByRole('status')
   expect(banner).toHaveTextContent('Brainstorm: the ship')
   expect(banner).not.toHaveTextContent('Ended')
@@ -16,8 +16,8 @@ it('shows the goal and End session', () => {
   expect(onEnd).toHaveBeenCalledTimes(1)
 })
 
-it('End session is disabled while busy', () => {
-  render(<SessionBanner session={{ goal: 'the ship' }} busy onEnd={vi.fn()} />)
+it('End session is disabled when it cannot send', () => {
+  render(<SessionBanner session={{ goal: 'the ship' }} canEnd={false} onEnd={vi.fn()} />)
   expect(screen.getByRole('button', { name: 'End session' })).toBeDisabled()
 })
 
@@ -25,7 +25,7 @@ it('an ended session shows Ended and no button', () => {
   render(
     <SessionBanner
       session={{ goal: 'the ship', endedAt: '2026-11-01T00:00:00.000Z' }}
-      busy={false}
+      canEnd
       onEnd={vi.fn()}
     />
   )

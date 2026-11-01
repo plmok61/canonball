@@ -31,7 +31,7 @@ export interface ProposalStore {
   /** Validates against access and disk; returns the pending proposal or throws AccessDenied / ProposalError. Writes nothing. */
   proposeEdit(root: string, access: AiAccess, relPath: string, edits: EditSpec[]): Promise<Proposal>
   proposeCreate(root: string, access: AiAccess, relPath: string, content: string): Promise<Proposal>
-  /** Writes through createAiAccess(root) after the content check; forgets the proposal. */
+  /** Writes through createAiAccess(root) after the content check; forgets the proposal. Applies run one at a time. */
   apply(root: string, id: string): Promise<{ relPath: string }>
   reject(id: string): void
   clear(): void
@@ -91,6 +91,34 @@ export function createProposalStore(deps?: { access?: (root: string) => AiAccess
     return { ...proposal }
   }
 
+  async function applyOne(root: string, id: string): Promise<{ relPath: string }> {
+    const entry = held.get(id)
+    if (!entry || entry.root !== root) throw new Error(EXPIRED_PROPOSAL)
+    const { proposal } = entry
+    const access = accessFor(root)
+    try {
+      if (proposal.kind === 'edit') {
+        const now = (await access.read(proposal.relPath)).content
+        const next =
+          now === proposal.before ? proposal.after : rebase(now, entry.edits, proposal.relPath)
+        await access.write(proposal.relPath, next)
+      } else {
+        await access.create(proposal.relPath, proposal.after)
+      }
+    } catch (err) {
+      // A changed file keeps the proposal so Reject still works; any other
+      // failure (access denied, file gone) ends it.
+      if (!(err instanceof Error && err.message === CHANGED_SINCE_PROPOSAL)) held.delete(id)
+      throw err
+    }
+    held.delete(id)
+    return { relPath: proposal.relPath }
+  }
+
+  // Applies run one at a time, so a second Accept on a file reads the first's
+  // result and takes the rebase path. A failed apply doesn't break the chain.
+  let queue: Promise<unknown> = Promise.resolve()
+
   return {
     async proposeEdit(root, access, relPath, edits) {
       const canonical = await access.checkWrite(relPath)
@@ -109,28 +137,10 @@ export function createProposalStore(deps?: { access?: (root: string) => AiAccess
       return hold(root, { kind: 'create', relPath: canonical, before: '', after: content })
     },
 
-    async apply(root, id) {
-      const entry = held.get(id)
-      if (!entry || entry.root !== root) throw new Error(EXPIRED_PROPOSAL)
-      const { proposal } = entry
-      const access = accessFor(root)
-      try {
-        if (proposal.kind === 'edit') {
-          const now = (await access.read(proposal.relPath)).content
-          const next =
-            now === proposal.before ? proposal.after : rebase(now, entry.edits, proposal.relPath)
-          await access.write(proposal.relPath, next)
-        } else {
-          await access.create(proposal.relPath, proposal.after)
-        }
-      } catch (err) {
-        // A changed file keeps the proposal so Reject still works; any other
-        // failure (access denied, file gone) ends it.
-        if (!(err instanceof Error && err.message === CHANGED_SINCE_PROPOSAL)) held.delete(id)
-        throw err
-      }
-      held.delete(id)
-      return { relPath: proposal.relPath }
+    apply(root, id) {
+      const run = queue.then(() => applyOne(root, id))
+      queue = run.catch(() => undefined)
+      return run
     },
 
     reject(id) {

@@ -136,6 +136,26 @@ describe('proposal store', () => {
     expect(await disk('notes/ideas.md')).toBe('A wolf.\nA owl.\n')
   })
 
+  it('stacked edits accepted at the same time both land', async () => {
+    const store = createProposalStore()
+    const access = createAiAccess(root)
+    const a = await store.proposeEdit(root, access, 'notes/ideas.md', swap)
+    const b = await store.proposeEdit(root, access, 'notes/ideas.md', [
+      { old_text: 'A hen.', new_text: 'A owl.' }
+    ])
+    await Promise.all([store.apply(root, a.id), store.apply(root, b.id)])
+    expect(await disk('notes/ideas.md')).toBe('A wolf.\nA owl.\n')
+  })
+
+  it('a rebase is refused when old text now appears more than once', async () => {
+    const store = createProposalStore()
+    const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)
+    const changed = 'A fox.\nA fox.\nA hen.\n'
+    await fs.writeFile(path.join(root, 'notes/ideas.md'), changed)
+    await expect(store.apply(root, p.id)).rejects.toThrow(CHANGED_SINCE_PROPOSAL)
+    expect(await disk('notes/ideas.md')).toBe(changed)
+  })
+
   it("a rebased edit keeps the writer's other changes", async () => {
     const store = createProposalStore()
     const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)

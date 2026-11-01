@@ -181,6 +181,8 @@ describe('sessions', () => {
     expect(parseChatThread(thread({ session: ended }))?.session).toEqual(ended)
     expect(parseChatThread(thread({ session: { goal: '' } }))).toBeNull()
     expect(parseChatThread(thread({ session: { goal: 3 } }))).toBeNull()
+    expect(parseChatThread(thread({ session: { goal: '  \n' } }))).toBeNull()
+    expect(parseChatThread(thread({ session: { goal: 'x'.repeat(2001) } }))).toBeNull()
     expect(parseChatThread(thread({ session: { goal: 'x', endedAt: 5 } }))).toBeNull()
     expect(parseChatThread(thread({ session: 'x' }))).toBeNull()
   })

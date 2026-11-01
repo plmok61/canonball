@@ -319,7 +319,7 @@ export function ChatPanel({
         onOpenSettings={onOpenSettings}
       />
       {view.thread?.session && (
-        <SessionBanner session={view.thread.session} busy={busy} onEnd={session.end} />
+        <SessionBanner session={view.thread.session} canEnd={ready} onEnd={session.end} />
       )}
       <ChatLog
         messages={messages}
