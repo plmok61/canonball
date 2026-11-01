@@ -15,6 +15,16 @@ function fakeAccess(files: Record<string, { access: 'edit' | 'read'; content: st
 const isProse = (p: string): boolean => p.startsWith('drafts/')
 
 describe('packFiles', () => {
+  it('packs only included files', async () => {
+    const access = fakeAccess({
+      'canon/c.md': { access: 'edit', content: 'canon' },
+      'notes/n.md': { access: 'edit', content: 'note' }
+    })
+    const out = await packFiles(access, isProse, 24_000, (p) => p.startsWith('canon/'))
+    expect(out).toContain('canon/c.md')
+    expect(out).not.toContain('notes/n.md')
+  })
+
   it('packs files in priority order within budget', async () => {
     const access = fakeAccess({
       'drafts/ch1.md': { access: 'read', content: 'draft' },

@@ -19,12 +19,15 @@ function groupOf(relPath: string, prose: (relPath: string) => boolean): number {
 export async function packFiles(
   access: AiAccess,
   prose: (relPath: string) => boolean,
-  budget: number = FALLBACK_BUDGET
+  budget: number = FALLBACK_BUDGET,
+  include: (relPath: string) => boolean = () => true
 ): Promise<string> {
   const files = (await access.list())
-    .filter((f) => !f.relPath.startsWith('memory/')) // already in the instructions
+    .filter((f) => !f.relPath.startsWith('memory/') && include(f.relPath)) // memory is already in the instructions
     .map((f) => ({ ...f, group: groupOf(f.relPath, prose) }))
-    .sort((a, b) => a.group - b.group || (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0))
+    .sort(
+      (a, b) => a.group - b.group || (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0)
+    )
 
   const included: string[] = []
   const skipped: string[] = []
