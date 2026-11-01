@@ -133,3 +133,18 @@ export interface ProtectionDelta {
   added: string[]
   removed: string[]
 }
+
+/** An item moved into the holding area, `.canonball/trash/<id>/<name>`. */
+export interface TrashedItem {
+  id: string
+  /** Where it was, project-relative. */
+  from: string
+  /** The protected entries at or under `from` when it was trashed. */
+  protectedEntries: string[]
+}
+
+/** What every file action returns: the fresh tree and protection. */
+export interface FileOpResult {
+  tree: TreeNode[]
+  protection: ProjectProtection
+}

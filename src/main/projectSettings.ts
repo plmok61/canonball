@@ -5,10 +5,17 @@ import {
   addProtected,
   normalizeProtected,
   parseProjectSettings,
+  remapProtected,
   removeProtected,
   validPath
 } from '../shared/protection'
-import type { ProjectProtection, ProtectionSettings, TreeMenuKind } from '../shared/types'
+import type {
+  Move,
+  ProjectProtection,
+  ProtectionDelta,
+  ProtectionSettings,
+  TreeMenuKind
+} from '../shared/types'
 import { resolveInside, writeDoc } from './projectFs'
 
 export const SETTINGS_REL = '.canonball/project.json'
@@ -90,5 +97,92 @@ export async function changeProtection(
       kind === 'protect' ? addProtected(current, relPath) : removeProtected(current, relPath)
     if (next.length === current.length && next.every((p, i) => p === current[i])) return fresh
     return saveProjectSettings(root, { version: 2, protected: next })
+  })
+}
+
+function sameList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((p, i) => p === b[i])
+}
+
+function deltaBetween(before: string[], after: string[]): ProtectionDelta {
+  return {
+    added: after.filter((p) => !before.includes(p)),
+    removed: before.filter((p) => !after.includes(p))
+  }
+}
+
+/**
+ * Reads the list on disk right now, refusing an unreadable file, and writes
+ * `change(list)` only when it differs.
+ */
+async function updateProtected(
+  root: string,
+  change: (current: string[]) => string[]
+): Promise<{ protection: ProjectProtection; before: string[]; after: string[] }> {
+  const fresh = await loadProjectProtection(root)
+  if (fresh.unreadable) throw new Error('Project settings file is unreadable')
+  const before = fresh.settings.protected
+  const after = change(before)
+  if (sameList(before, after)) return { protection: fresh, before, after: before }
+  const protection = await saveProjectSettings(root, { version: 2, protected: after })
+  return { protection, before, after }
+}
+
+function validMoves(moves: Move[]): boolean {
+  return moves.every((m) => validPath(m.from) && validPath(m.to))
+}
+
+/**
+ * Keeps protection in step with a move. `'before'` adds each remapped entry
+ * alongside the old one, so the item is protected at both paths while it
+ * moves; `'after'` leaves only the remapped list.
+ */
+export async function remapProtection(
+  root: string,
+  moves: Move[],
+  phase: 'before' | 'after'
+): Promise<ProjectProtection> {
+  if (!validMoves(moves)) throw new Error('Invalid path')
+  return serialized(root, async () => {
+    const out = await updateProtected(root, (current) =>
+      phase === 'before'
+        ? normalizeProtected([...current, ...remapProtected(current, moves)])
+        : remapProtected(current, moves)
+    )
+    return out.protection
+  })
+}
+
+/** Protects or unprotects several paths at once and reports the exact change. */
+export async function changeProtectionMany(
+  root: string,
+  kind: TreeMenuKind,
+  relPaths: string[]
+): Promise<{ protection: ProjectProtection; delta: ProtectionDelta }> {
+  if (!relPaths.every(validPath)) throw new Error('Invalid path')
+  return serialized(root, async () => {
+    const out = await updateProtected(root, (current) =>
+      relPaths.reduce(
+        (list, p) => (kind === 'protect' ? addProtected(list, p) : removeProtected(list, p)),
+        current
+      )
+    )
+    return { protection: out.protection, delta: deltaBetween(out.before, out.after) }
+  })
+}
+
+/** Applies a change to the list on disk now (never a snapshot). Undo passes the reverse. */
+export async function applyProtectionDelta(
+  root: string,
+  delta: ProtectionDelta
+): Promise<{ protection: ProjectProtection; applied: ProtectionDelta }> {
+  if (!delta.added.every(validPath) || !delta.removed.every(validPath)) {
+    throw new Error('Invalid path')
+  }
+  return serialized(root, async () => {
+    const out = await updateProtected(root, (current) =>
+      normalizeProtected([...current.filter((p) => !delta.removed.includes(p)), ...delta.added])
+    )
+    return { protection: out.protection, applied: deltaBetween(out.before, out.after) }
   })
 }

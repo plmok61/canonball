@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, EMPTY_SETTINGS } from '../shared/protection'
 import {
   SETTINGS_REL,
+  applyProtectionDelta,
   loadProjectProtection,
   changeProtection,
+  changeProtectionMany,
+  remapProtection,
   saveProjectSettings,
   setProtectedPaths
 } from './projectSettings'
@@ -169,6 +172,56 @@ describe('project settings', () => {
     await fs.mkdir(path.dirname(file()))
     await fs.writeFile(file(), '{oops')
     await expect(changeProtection(root, 'protect', 'drafts')).rejects.toThrow(
+      'Project settings file is unreadable'
+    )
+    expect(await fs.readFile(file(), 'utf8')).toBe('{oops')
+  })
+
+  it('changeProtectionMany returns the exact delta, and the reverse delta undoes it', async () => {
+    await setProtectedPaths(root, ['book/ch'])
+    const out = await changeProtectionMany(root, 'protect', ['book'])
+    expect(out.delta).toEqual({ added: ['book'], removed: ['book/ch'] })
+    expect(out.protection.settings.protected).toEqual(['book'])
+    const back = await applyProtectionDelta(root, { added: ['book/ch'], removed: ['book'] })
+    expect(back.applied).toEqual({ added: ['book/ch'], removed: ['book'] })
+    expect((await loadProjectProtection(root)).settings.protected).toEqual(['book/ch'])
+  })
+
+  it('applyProtectionDelta reports only what actually changed', async () => {
+    await setProtectedPaths(root, ['drafts'])
+    const out = await applyProtectionDelta(root, { added: ['drafts/a.md'], removed: ['notes'] })
+    expect(out.applied).toEqual({ added: [], removed: [] })
+    expect(out.protection.settings.protected).toEqual(['drafts'])
+  })
+
+  it('remapProtection keeps both entries before a move and only the new one after', async () => {
+    await setProtectedPaths(root, ['drafts'])
+    const moves = [{ from: 'drafts', to: 'chapters' }]
+    const before = await remapProtection(root, moves, 'before')
+    expect(before.settings.protected).toEqual(['drafts', 'chapters'])
+    const after = await remapProtection(root, moves, 'after')
+    expect(after.settings.protected).toEqual(['chapters'])
+  })
+
+  it('remapProtection writes nothing when nothing changes', async () => {
+    await setProtectedPaths(root, ['drafts'])
+    const past = new Date('2020-01-01T00:00:00Z')
+    await fs.utimes(file(), past, past)
+    await remapProtection(root, [{ from: 'notes', to: 'ideas' }], 'before')
+    await remapProtection(root, [{ from: 'notes', to: 'ideas' }], 'after')
+    expect((await fs.stat(file())).mtimeMs).toBe(past.getTime())
+  })
+
+  it('remapProtection and changeProtectionMany refuse an unreadable file', async () => {
+    await fs.mkdir(path.dirname(file()))
+    await fs.writeFile(file(), '{oops')
+    await expect(remapProtection(root, [{ from: 'a', to: 'b' }], 'before')).rejects.toThrow(
+      'Project settings file is unreadable'
+    )
+    await expect(changeProtectionMany(root, 'protect', ['a'])).rejects.toThrow(
+      'Project settings file is unreadable'
+    )
+    await expect(applyProtectionDelta(root, { added: ['a'], removed: [] })).rejects.toThrow(
       'Project settings file is unreadable'
     )
     expect(await fs.readFile(file(), 'utf8')).toBe('{oops')
