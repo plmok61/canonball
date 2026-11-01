@@ -74,7 +74,7 @@ function rebase(current: string, edits: EditSpec[] | undefined, relPath: string)
   try {
     result = applyEdits(current, edits, relPath)
   } catch (err) {
-    if (err instanceof ProposalError) throw new Error(CHANGED_SINCE_PROPOSAL)
+    if (err instanceof ProposalError) throw new Error(CHANGED_SINCE_PROPOSAL, { cause: err })
     throw err
   }
   if (result === current) throw new Error(CHANGED_SINCE_PROPOSAL)
