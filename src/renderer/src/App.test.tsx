@@ -869,3 +869,70 @@ it('protecting from the menu with no change pushes nothing to undo', async () =>
   await act(async () => {})
   expect(api.applyProtectionDelta).not.toHaveBeenCalled()
 })
+
+it('a new file in a collapsed nested folder stays shown after the box closes', async () => {
+  const api = actionProject()
+  const nested = [folder('canon'), folder('drafts'), folder('notes', [folder('notes/sub')])]
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: nested,
+    protection: draftsProtected
+  })
+  api.createEntry.mockResolvedValue({
+    tree: [
+      folder('canon'),
+      folder('drafts'),
+      folder('notes', [folder('notes/sub', [file('notes/sub/x.md')])])
+    ],
+    protection: draftsProtected,
+    relPath: 'notes/sub/x.md'
+  })
+  api.showTreeMenu.mockResolvedValueOnce('new-file')
+  render(<App />)
+  await rightClick('Project', 'sub')
+  const box = await screen.findByRole('textbox', { name: 'Name' })
+  fireEvent.change(box, { target: { value: 'x' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull())
+  expect(screen.getByRole('button', { name: 'x' })).toBeInTheDocument()
+})
+
+it('a cut pasted back into its own folder keeps the clipboard', async () => {
+  const api = actionProject()
+  api.pasteEntries.mockResolvedValue({
+    tree: actionTree,
+    protection: draftsProtected,
+    created: [],
+    moves: []
+  })
+  render(<App />)
+  await openA()
+  focusTree()
+  key('x', { metaKey: true })
+  key('v', { metaKey: true })
+  await waitFor(() => expect(api.pasteEntries).toHaveBeenCalledTimes(1))
+  await act(async () => {})
+  key('v', { metaKey: true })
+  await waitFor(() => expect(api.pasteEntries).toHaveBeenCalledTimes(2))
+  expect(screen.getByRole('button', { name: 'a' }).closest('.cb-row')).toHaveClass('cb-row-cut')
+  focusTree()
+  key('z', { metaKey: true })
+  await act(async () => {})
+  expect(api.moveExact).not.toHaveBeenCalled()
+})
+
+it('a folder selected with its own child protects the folder only', async () => {
+  const api = actionProject()
+  api.showTreeMenu.mockResolvedValueOnce('protect')
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'notes' }), { metaKey: true })
+  fireEvent.click(screen.getByRole('button', { name: 'a' }), { metaKey: true })
+  await rightClick('Project', 'notes')
+  await waitFor(() =>
+    expect(api.changeProtectionMany).toHaveBeenCalledWith('/p', 'protect', ['notes'])
+  )
+  expect(api.showTreeMenu).toHaveBeenCalledWith(
+    menuFor({ kind: 'multi', protectRule: 'protect', canPaste: false })
+  )
+})

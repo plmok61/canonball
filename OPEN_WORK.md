@@ -76,6 +76,10 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
     - If a second session ends before the first log is accepted, both logs target the same `session-N.md`, and the second Accept fails with "File already exists".
     - An empty end reply (no text and no cards) leaves the session open.
     - `loadProjectAccess` runs for every request with a project open, including plain chat.
+- File tree actions (`src/renderer/src/tree/useFileActions.ts`):
+  - Known gap: the orphaned-autosave race. Before a rename, move or trash of the open file, the app calls `flushAll()`. Then the Editor (keyed by root and path) unmounts, and any unsaved autosave is handed to `saveRegistry.orphan` under the old path. The window is one IPC round-trip, so this is very unlikely. The fix belongs in Editor/saveRegistry: re-key or drop the orphan when its path moves or is trashed.
+    - (a) If the writer types after `flushAll` but before a file rename or trash returns, the orphan's retry `writeDoc` can recreate the old path.
+    - (b) After a folder rename, the orphan's write to the old path fails and retries forever, and the new editor never adopts its text, because `settleOrphan` is keyed by the new path.
 
 ## Decide later (after using the app)
 

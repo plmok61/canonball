@@ -87,6 +87,13 @@ function shownName(tree: TreeNode[], relPath: string): string {
   return findNode(tree, relPath)?.kind === 'folder' ? name : name.replace(/\.md$/i, '')
 }
 
+/** `a/b/c` gives `a`, `a/b`, `a/b/c`; `''` gives none. */
+function withAncestors(relPath: string): string[] {
+  if (relPath === '') return []
+  const parts = relPath.split('/')
+  return parts.map((_, i) => parts.slice(0, i + 1).join('/'))
+}
+
 const reversed = (moves: Move[]): Move[] => moves.map((m) => ({ from: m.to, to: m.from })).reverse()
 
 export function useFileActions({
@@ -220,8 +227,10 @@ export function useFileActions({
       apply(r)
       if (c.mode === 'cut') {
         // Cut items leave the clipboard after one paste.
+        // A cut pasted back into its own folder moves nothing and stays on the clipboard.
+        if (r.moves.length === 0) return
         setClipState(null)
-        if (r.moves.length) push({ kind: 'move', label: 'Paste', moves: r.moves })
+        push({ kind: 'move', label: 'Paste', moves: r.moves })
         follow(r.moves)
       } else if (r.created.length) {
         push({ kind: 'create', label: 'Paste', created: r.created })
@@ -269,7 +278,7 @@ export function useFileActions({
 
   const protect = (kind: TreeMenuKind, targets: string[]): Promise<void> =>
     run([], async (at) => {
-      const r = await api.changeProtectionMany(at, kind, targets)
+      const r = await api.changeProtectionMany(at, kind, topmost(targets))
       if (!live(at)) return
       setProtection(r.protection)
       if (r.delta.added.length || r.delta.removed.length) {
@@ -380,13 +389,15 @@ export function useFileActions({
         : targets.length > 1
           ? 'multi'
           : (findNode(tree, targets[0])?.kind ?? 'file')
-    // Rows inside a protected folder get neither Protect nor Stop protecting.
+    // Rows inside a protected folder get neither Protect nor Stop protecting. A folder
+    // selected with its own contents stands for them.
+    const top = topmost(targets)
     const protectRule: MenuShape['protectRule'] =
-      targets.length === 0
+      top.length === 0
         ? 'none'
-        : targets.every((t) => settings.protected.includes(t))
+        : top.every((t) => settings.protected.includes(t))
           ? 'unprotect'
-          : targets.every((t) => !isProtected(settings, t))
+          : top.every((t) => !isProtected(settings, t))
             ? 'protect'
             : 'none'
     return { kind, protectRule, canPaste: !!clip && clip.paths.length > 0 }
@@ -512,8 +523,11 @@ export function useFileActions({
           created: [r.relPath]
         })
         select([r.relPath])
+        // The box forced its folder open; keep it open so the new row stays in view.
+        const shown = withAncestors(edit.parentRel)
         if (edit.kind === 'file') setSelectedPath(r.relPath)
-        else setExpand([r.relPath])
+        else shown.push(r.relPath)
+        if (shown.length) setExpand(shown)
       }
       setEditing(null)
       return null
