@@ -24,3 +24,9 @@ it('uses the topmost of the dragged items', () => {
   expect(dropTarget(['book', 'book/a.md'], { relPath: 'book/ch', kind: 'folder' })).toBeNull()
   expect(dropTarget(['book/a.md', 'book/b.md'], { relPath: 'book', kind: 'folder' })).toBeNull()
 })
+
+it('a copy into the items own folder is allowed, but never a folder into itself', () => {
+  expect(dropTarget(['notes/a.md'], { relPath: 'notes', kind: 'folder' }, true)).toBe('notes')
+  expect(dropTarget(['notes/a.md'], { relPath: 'notes', kind: 'folder' })).toBeNull()
+  expect(dropTarget(['book'], { relPath: 'book/ch', kind: 'folder' }, true)).toBeNull()
+})

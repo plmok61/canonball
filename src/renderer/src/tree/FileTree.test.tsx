@@ -312,12 +312,19 @@ it('highlights an allowed row under the pointer and drops with the option key', 
   const row = rowOf('canon')
   fireEvent.dragOver(row, dt())
   expect(row).toHaveClass('cb-row-drop')
-  expect(drag.onDragOver).toHaveBeenCalledWith({ relPath: 'canon', kind: 'folder' })
+  expect(drag.onDragOver).toHaveBeenCalledWith({ relPath: 'canon', kind: 'folder' }, false)
   const ev = createEvent.drop(row, dt())
   Object.defineProperty(ev, 'altKey', { value: true })
   fireEvent(row, ev)
   expect(drag.onDrop).toHaveBeenCalledWith({ relPath: 'canon', kind: 'folder' }, true)
   expect(row).not.toHaveClass('cb-row-drop')
+})
+
+it('lights the parent folder, not the file row, when over a file', () => {
+  render(<FileTree {...base} drag={dragHandlers()} />)
+  fireEvent.dragOver(rowOf('characters'), dt())
+  expect(rowOf('characters')).not.toHaveClass('cb-row-drop')
+  expect(rowOf('canon')).toHaveClass('cb-row-drop')
 })
 
 it('does not highlight a refused row', () => {

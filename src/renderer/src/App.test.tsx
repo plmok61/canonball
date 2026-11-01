@@ -1018,7 +1018,10 @@ function dnd(): { dataTransfer: Record<string, unknown> } {
   }
 }
 
-async function dragAOnto(init: { altKey?: boolean }): Promise<ReturnType<typeof actionProject>> {
+async function dragAOnto(
+  init: { altKey?: boolean },
+  onto = 'canon'
+): Promise<ReturnType<typeof actionProject>> {
   const api = actionProject()
   api.pasteEntries.mockResolvedValue({
     tree: actionTree,
@@ -1029,7 +1032,7 @@ async function dragAOnto(init: { altKey?: boolean }): Promise<ReturnType<typeof 
   render(<App />)
   await openA()
   const from = screen.getByRole('button', { name: 'a' }).closest('.cb-row')!
-  const to = screen.getByRole('button', { name: 'canon' }).closest('.cb-row')!
+  const to = screen.getByRole('button', { name: onto }).closest('.cb-row')!
   const t = dnd()
   fireEvent.dragStart(from, t)
   for (const make of [createEvent.dragOver, createEvent.drop]) {
@@ -1061,4 +1064,87 @@ it('a drop that is not from the tree is ignored', async () => {
   const to = screen.getByRole('button', { name: 'canon' }).closest('.cb-row')!
   fireEvent.drop(to, { dataTransfer: { types: ['Files'] } })
   expect(api.pasteEntries).not.toHaveBeenCalled()
+})
+
+it('option-drop on the items own folder copies (duplicates) there', async () => {
+  const api = await dragAOnto({ altKey: true }, 'notes')
+  await waitFor(() =>
+    expect(api.pasteEntries).toHaveBeenCalledWith('/p', 'copy', ['notes/a.md'], 'notes')
+  )
+})
+
+it('a plain drop on the items own folder does nothing', async () => {
+  const api = await dragAOnto({}, 'notes')
+  await act(async () => {})
+  expect(api.pasteEntries).not.toHaveBeenCalled()
+})
+
+const twoFiles = [
+  folder('canon'),
+  folder('drafts'),
+  folder('notes', [file('notes/a.md'), file('notes/b.md')])
+]
+
+async function openTwo(): Promise<ReturnType<typeof actionProject>> {
+  const api = actionProject()
+  const p = await api.openProject()
+  api.openProject.mockResolvedValue({ ...p, tree: twoFiles })
+  render(<App />)
+  await openA()
+  return api
+}
+
+const rowButton = (name: string): Element =>
+  screen.getByRole('button', { name }).closest('.cb-row')!
+
+it('dragging a selected row drags the whole selection', async () => {
+  const api = await openTwo()
+  api.pasteEntries.mockResolvedValue({
+    tree: twoFiles,
+    protection: draftsProtected,
+    created: [],
+    moves: []
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'b' }), { metaKey: true })
+  const t = dnd()
+  fireEvent.dragStart(rowButton('a'), t)
+  fireEvent.dragOver(rowButton('canon'), t)
+  fireEvent.drop(rowButton('canon'), t)
+  await waitFor(() =>
+    expect(api.pasteEntries).toHaveBeenCalledWith(
+      '/p',
+      'move',
+      ['notes/a.md', 'notes/b.md'],
+      'canon'
+    )
+  )
+})
+
+it('dragging an unselected row selects just that row', async () => {
+  await openTwo()
+  fireEvent.dragStart(rowButton('b'), dnd())
+  expect(rowButton('b').closest('[role="treeitem"]')).toHaveAttribute('aria-selected', 'true')
+  expect(rowButton('a').closest('[role="treeitem"]')).toHaveAttribute('aria-selected', 'false')
+})
+
+it('a move-drop that moves nothing pushes no history step', async () => {
+  const api = actionProject()
+  api.pasteEntries.mockResolvedValue({
+    tree: actionTree,
+    protection: draftsProtected,
+    created: [],
+    moves: []
+  })
+  render(<App />)
+  await openA()
+  const t = dnd()
+  fireEvent.dragStart(rowButton('a'), t)
+  fireEvent.dragOver(rowButton('canon'), t)
+  fireEvent.drop(rowButton('canon'), t)
+  await waitFor(() => expect(api.pasteEntries).toHaveBeenCalledTimes(1))
+  await act(async () => {})
+  focusTree()
+  act(() => menu!('undo'))
+  await act(async () => {})
+  expect(api.moveExact).not.toHaveBeenCalled()
 })

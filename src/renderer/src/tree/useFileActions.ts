@@ -267,13 +267,13 @@ export function useFileActions({
         setSelection({ paths: [relPath], anchor: relPath })
       }
     },
-    onDragOver: (target) =>
-      dragging.current !== null && dropTarget(dragging.current, target) !== null,
+    onDragOver: (target, copy) =>
+      dragging.current !== null && dropTarget(dragging.current, target, copy) !== null,
     onDrop: (target, copy) => {
       const items = dragging.current
       dragging.current = null
       if (!items || savingRef.current) return
-      const dest = dropTarget(items, target)
+      const dest = dropTarget(items, target, copy)
       if (dest === null) return
       void transfer(copy ? 'copy' : 'cut', items, dest, copy ? 'Copy' : 'Move', false)
     },

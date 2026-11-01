@@ -285,22 +285,31 @@ export function FileTree({
     setHoverFolder(null)
     setDropOver(null)
   }
+  /** The row to light up: the folder the drop lands in, none for the top level. */
+  const lit = (target: DropOver, key: string): string | null =>
+    target.relPath === null
+      ? key
+      : target.kind === 'folder'
+        ? target.relPath
+        : target.relPath.includes('/')
+          ? target.relPath.slice(0, target.relPath.lastIndexOf('/'))
+          : null
   const over = (e: React.DragEvent, key: string, target: DropOver, depth?: number): void => {
     if (!isTreeDrag(e)) return
     e.stopPropagation()
-    if (!drag.onDragOver(target)) {
-      if (dropOver === key) endDrag()
+    if (!drag.onDragOver(target, !!e.altKey)) {
+      if (dropOver === lit(target, key)) endDrag()
       return
     }
     e.preventDefault()
     e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move'
-    setDropOver(key)
+    setDropOver(lit(target, key))
     const path = target.kind === 'folder' ? target.relPath : null
     setHoverFolder((cur) =>
       path === null ? null : cur?.path === path ? cur : { path, depth: depth ?? 0 }
     )
   }
-  const leave = (e: React.DragEvent, key: string): void => {
+  const leave = (e: React.DragEvent, key: string | null): void => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
     setHoverFolder(null)
     setDropOver((cur) => (cur === key ? null : cur))
@@ -335,7 +344,7 @@ export function FileTree({
           drag.onDragEnd()
         },
         onDragOver: (e) => over(e, relPath, target, depth),
-        onDragLeave: (e) => leave(e, relPath),
+        onDragLeave: (e) => leave(e, lit(target, relPath)),
         onDrop: (e) => drop(e, target)
       }
     },
