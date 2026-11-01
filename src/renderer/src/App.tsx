@@ -204,7 +204,12 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     historyCommand.current = (command) => {
-      if (actions.treeFocused) void actions[command]()
+      const a = document.activeElement
+      const inField =
+        a instanceof HTMLInputElement ||
+        a instanceof HTMLTextAreaElement ||
+        (a instanceof HTMLElement && a.isContentEditable)
+      if (actions.treeFocused && !actions.editing && !inField) void actions[command]()
       else if (command === 'undo') window.canonball.nativeUndo()
       else window.canonball.nativeRedo()
     }
