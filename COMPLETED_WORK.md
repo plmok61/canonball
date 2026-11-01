@@ -2,6 +2,10 @@
 
 Finished work on the Canonball desktop app, newest first.
 
+## 2026-11-01
+
+- [x] Phase 6: Brainstorm sessions — start a session with a goal from the chat header; the v1 brainstorm stance, the readable canon and notes, and the last log's Next Session go into the AI's instructions; End session drafts a `sessions/session-N.md` log from the template as an Accept/Reject card, plus one canon card per locked-in decision; stacked edits to one file can be accepted one after another
+
 ## 2026-10-31
 
 - [x] Phase 5: AI file tools & proposals — `list_files`/`read_file`/`propose_edit`/`create_note` gated by the access layer, Accept/Reject cards with a line diff, writes only on Accept (through `aiAccess`, after a content check), prompt fallback for models without tool calling, `memory/` (style rules, names to avoid) in the AI's instructions, end-to-end tests that the AI never writes prose

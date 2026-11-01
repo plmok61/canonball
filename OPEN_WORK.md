@@ -7,7 +7,6 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 
 ## Build phases
 
-- [ ] **Phase 6: Brainstorm sessions.** (plan to write)
 - [ ] **Phase 7: Package & release.** Mac build, README, license (plan to write)
 
 ## Notes for later phases
@@ -54,7 +53,7 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
 - Phase 5 (AI file tools & proposals):
   - Tools are in `src/main/ai/tools.ts` (`FILE_TOOLS`, `createToolRunner`). Errors go back to the model as tool results starting with `Error: `. The loop in `chatService.ts` stops after 10 tool rounds (`MAX_TOOL_ROUNDS`).
   - Proposals live in main memory (`src/main/ai/proposals.ts`, `createProposalStore`), keyed by UUID and project root, and are cleared on project switch. Accept re-reads the file through `aiAccess`, refuses if it no longer equals `before`, and writes through `aiAccess.write`/`create`. Cards and statuses are saved on the assistant message in the chat file.
-  - The system prompt is built per request by `buildInstructions` (`src/main/ai/instructions.ts`) from the base text, tool or fallback rules, and top-level `memory/*.md` (20,000 characters each). **Phase 6's brainstorm stance goes here.**
+  - The system prompt is built per request by `buildInstructions` (`src/main/ai/instructions.ts`) from the base text, tool or fallback rules, and top-level `memory/*.md` (20,000 characters each). Phase 6's session block is appended last.
   - Fallback (`src/main/ai/fallback.ts`): used when a tools request fails with 400/404/422/501 and a body mentioning tool/function; the `provider:model` pair is remembered for the app session, with no notice. Readable files are packed up to 24,000 characters (memory excluded, since it's already in the instructions; prose last). Edits use `<canonball-edit path>`/`<canonball-create path>` tags, which are filtered from the streamed text.
   - Google: tools with no parameters are sent without a `parameters` field (Gemini can reject an empty `properties` object). Not yet checked against the live API.
   - Known gaps:
@@ -65,6 +64,17 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
     - OpenAI-compatible tool-call deltas without an `index` (some local servers) collapse into one call.
     - Fallback tag parsing accepts double-quoted `path` only; the packer reads files it then skips for size.
     - A failed card with no error text (hand-edited chat file) shows an empty alert.
+- Phase 6 (brainstorm sessions):
+  - A session is a chat thread with `session: { goal, endedAt? }`. The renderer (`src/renderer/src/chat/useSession.ts`, `SessionStart.tsx`, `SessionBanner.tsx`) sends `session: { goal, phase: 'brainstorm' | 'end' }` with each request until the session ends. `parseChatRequest` validates it in main.
+  - The session block is built per request in `src/main/ai/sessions.ts` (`buildSessionBlock`), and `buildInstructions` appends it last. It holds the stance, the goal, the previous log's Next Session, the end rules (phase `end` only), and in tools mode the readable `canon/` and `notes/` packed by `packFiles` (24,000 characters). It is rebuilt in fallback form when a request falls back.
+  - Session logs are the visible top-level `sessions/*.md` files except `README.md` and `session-template.md`. The newest is the one that sorts last by numeric `localeCompare`. The next log is `sessions/session-<N+1>.md`, from the highest `session-<N>.md`. The template is the project's `sessions/session-template.md`, or a built-in copy if that file is missing or hidden.
+  - Stacked edits: the proposal store keeps each edit's `old_text`/`new_text` pairs. On Accept, if the file has moved on, it re-applies them when every `old_text` is still found exactly once, and otherwise refuses with "changed since". Applies run one at a time, so two Accepts on one file can't race.
+  - Known gaps:
+    - The previous log is found at request time, so a log the writer saves mid-session is read on the next message.
+    - End session runs once. If the model forgets the log, or the log card fails or is rejected, there's no "write the log again" button (the writer can ask in chat).
+    - If a second session ends before the first log is accepted, both logs target the same `session-N.md`, and the second Accept fails with "File already exists". A hidden `session-N.md` can collide the same way.
+    - An empty end reply (no text and no cards) leaves the session open.
+    - `loadProjectAccess` runs for every request with a project open, including plain chat.
 
 ## Decide later (after using the app)
 
