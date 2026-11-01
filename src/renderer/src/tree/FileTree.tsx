@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TreeNode } from '../../../shared/types'
 import { displayName } from '../../../shared/paths'
+import { ChevronDown, ChevronRight } from '../icons'
 import { splitTree } from './splitTree'
 
 interface Props {
@@ -75,7 +76,7 @@ function Rows({
             <div key={n.relPath} role="treeitem" aria-expanded={open}>
               <div className="cb-row" style={rowStyle(depth)} onContextMenu={onMenu(n.relPath)}>
                 <button type="button" style={mainStyle} onClick={() => toggle(n.relPath)}>
-                  <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                  <span aria-hidden="true">{open ? <ChevronDown /> : <ChevronRight />}</span>
                   {parentPath && <span className="cb-row-parent">{parentPath}</span>}
                   <span>{n.name}</span>
                 </button>

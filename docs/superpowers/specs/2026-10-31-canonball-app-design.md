@@ -74,7 +74,7 @@ The rule is enforced in the app's file-access layer, not just in the prompt. Eve
   2. **Local server URL:** any OpenAI-compatible endpoint, e.g. Ollama at `http://localhost:11434` or LM Studio.
 - The model is chosen from a dropdown in the chat panel.
 - API keys are stored in the macOS Keychain (Electron `safeStorage` or equivalent), never in the project folder.
-- The AI reaches files through tools the app provides (list files, read file, propose edit, create note), so whole projects aren't sent with every message. Only files whose permissions allow it are visible to these tools.
+- The AI reaches files through tools the app provides (list files, read file, propose edit, create note), so whole projects aren't sent with every message. Every available file is visible to these tools; protected ones are read only.
 - For local models without tool-calling support, the app falls back to putting the readable files (or as many as fit) directly into the prompt, and edits come back as proposals the writer accepts.
 
 ## Brainstorm sessions (carried over from v1)

@@ -1,5 +1,7 @@
 # Phase 3: AI Permissions Implementation Plan
 
+> Superseded in part by `docs/superpowers/specs/2026-11-01-protected-files-design.md`: the edit / read-only / hidden setting was removed, and prose folders are now called protected files.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The writer sees and sets, per folder and per file, what the AI may do (✎ / 👁 / ⊘), marks which folders hold prose, and main has an access layer that refuses every AI write to prose, before any AI code exists.

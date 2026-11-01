@@ -7,6 +7,7 @@ import {
   type ModelList,
   type ProviderId
 } from '../../../shared/ai'
+import { Gear } from '../icons'
 
 interface Props {
   status: AiStatus | null
@@ -108,7 +109,7 @@ export function ChatHeader({
           title="AI settings"
           onClick={onOpenSettings}
         >
-          ⚙
+          <Gear />
         </button>
       </header>
       {models && models.errors.length > 0 && (

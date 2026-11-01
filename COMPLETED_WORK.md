@@ -4,6 +4,7 @@ Finished work on the Canonball desktop app, newest first.
 
 ## 2026-11-01
 
+- [x] Protected files and the left column — one rule (the AI reads everything and never edits protected files) replaces the per-file edit / read-only / hidden setting; a Protected section at the top of the left column, right-click to protect or stop protecting, first-open dialog, SVG icons instead of symbol glyphs. Spec: `docs/superpowers/specs/2026-11-01-protected-files-design.md`; plan: `docs/superpowers/plans/2026-11-01-protected-files.md`
 - [x] Phase 6: Brainstorm sessions — start a session with a goal from the chat header; the v1 brainstorm stance, the readable canon and notes, and the last log's Next Session go into the AI's instructions; End session drafts a `sessions/session-N.md` log from the template as an Accept/Reject card, plus one canon card per locked-in decision; stacked edits to one file can be accepted one after another
 
 ## 2026-10-31
