@@ -119,3 +119,17 @@ export interface CanonballApi {
   /** Subscribe to chat stream events; returns an unsubscribe. */
   onChatEvent(handler: (e: ChatEvent) => void): () => void
 }
+
+export type EntryKind = 'file' | 'folder'
+
+/** A rename or move of one project-relative path. */
+export interface Move {
+  from: string
+  to: string
+}
+
+/** Entries added to and removed from the protected list by a file action. */
+export interface ProtectionDelta {
+  added: string[]
+  removed: string[]
+}

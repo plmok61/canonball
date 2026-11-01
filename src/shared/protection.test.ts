@@ -4,6 +4,7 @@ import {
   isProtected,
   normalizeProtected,
   parseProjectSettings,
+  remapProtected,
   removeProtected
 } from './protection'
 import type { ProtectionSettings } from './types'
@@ -55,5 +56,17 @@ describe('parseProjectSettings', () => {
   })
   it('normalizes the list', () => {
     expect(parseProjectSettings({ version: 2, protected: ['a', 'a/b'] })).toEqual(s(['a']))
+  })
+})
+
+describe('remapProtected', () => {
+  it('follows a rename', () => {
+    expect(remapProtected(['drafts'], [{ from: 'drafts', to: 'chapters' }])).toEqual(['chapters'])
+  })
+  it('normalizes after moving into a protected folder', () => {
+    expect(remapProtected(['x', 'drafts'], [{ from: 'x', to: 'drafts/x' }])).toEqual(['drafts'])
+  })
+  it('leaves sibling-prefixed paths alone', () => {
+    expect(remapProtected(['bookish'], [{ from: 'book', to: 'novel' }])).toEqual(['bookish'])
   })
 })

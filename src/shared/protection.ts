@@ -1,4 +1,5 @@
-import type { ProtectionSettings } from './types'
+import { remapPath } from './fileNames'
+import type { Move, ProtectionSettings } from './types'
 
 export const EMPTY_SETTINGS: ProtectionSettings = { version: 2, protected: [] }
 
@@ -46,4 +47,9 @@ export function parseProjectSettings(raw: unknown): ProtectionSettings | null {
   const list = r.version === 2 ? r.protected : r.version === 1 ? r.prose : null
   if (!Array.isArray(list) || !list.every(validPath)) return null
   return { version: 2, protected: normalizeProtected(list) }
+}
+
+/** Follows renames and moves: remaps each entry through every move, then normalizes. */
+export function remapProtected(list: string[], moves: Move[]): string[] {
+  return normalizeProtected(list.map((p) => moves.reduce((acc, m) => remapPath(acc, m), p)))
 }
