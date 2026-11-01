@@ -26,7 +26,7 @@ Electron + React + TypeScript, built with electron-vite. Editor: TipTap (free, o
 
 ## Hard rules
 
-- **The AI never edits prose folders** (`drafts/` today; configurable prose folders arrive in Phase 3). No continue-writing, rewrite-selection, or ghost-text features, ever. Every AI edit elsewhere is shown to the writer for Accept/Reject.
+- **The AI never edits protected files** (the writer's drafts and anything else they protect). No continue-writing, rewrite-selection, or ghost-text features, ever. Every AI edit elsewhere is shown to the writer for Accept/Reject.
 - The app never writes a file the writer didn't change.
 - The renderer touches the disk only through `window.canonball`. Every project-relative path is resolved inside the project root (`resolveInside`), and escapes are rejected.
 - `contextIsolation: true`, `nodeIntegration: false`.

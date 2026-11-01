@@ -16,7 +16,7 @@ export const FILE_TOOLS: ToolSpec[] = [
   {
     name: 'list_files',
     description:
-      'List the project files you can see, one per line, each marked "(can edit)" or "(read only)".',
+      'List the project files, one per line. Protected files are marked "(protected, read only)"; you can suggest changes to the rest.',
     parameters: { type: 'object', properties: {} }
   },
   {
@@ -115,7 +115,7 @@ export function createToolRunner(deps: {
         const files = await access.list()
         if (files.length === 0) return 'No files are visible to you.'
         return files
-          .map((f) => `${f.relPath} (${f.access === 'edit' ? 'can edit' : 'read only'})`)
+          .map((f) => (f.protected ? `${f.relPath} (protected, read only)` : f.relPath))
           .join('\n')
       }
       case 'read_file': {

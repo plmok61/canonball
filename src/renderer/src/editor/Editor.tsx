@@ -25,26 +25,31 @@ interface EditorProps {
   /** The project this file belongs to; every save is checked against it. */
   root: string
   relPath: string
-  /** Whether the project's settings mark this file as prose (shows the draft banner). */
-  isProse: boolean
+  /** Whether this file is protected from AI edits (shows the protected banner). */
+  isProtected: boolean
   /** A change reloads the file from disk, unless it has unsaved edits. */
   reloadToken?: number
 }
 
-export function Editor({ root, relPath, isProse, reloadToken }: EditorProps): React.JSX.Element {
+export function Editor({
+  root,
+  relPath,
+  isProtected,
+  reloadToken
+}: EditorProps): React.JSX.Element {
   // A fresh instance per file keeps load, autosave and flush scoped to one path.
   return (
     <FileEditor
       key={`${root}\0${relPath}`}
       root={root}
       relPath={relPath}
-      isProse={isProse}
+      isProtected={isProtected}
       reloadToken={reloadToken}
     />
   )
 }
 
-function FileEditor({ root, relPath, isProse, reloadToken }: EditorProps): React.JSX.Element {
+function FileEditor({ root, relPath, isProtected, reloadToken }: EditorProps): React.JSX.Element {
   const extensions = useMemo(
     () => [
       ...createExtensions(),
@@ -164,7 +169,7 @@ function FileEditor({ root, relPath, isProse, reloadToken }: EditorProps): React
 
   return (
     <div className="cb-editor">
-      {editor && <Toolbar editor={editor} isProse={isProse} />}
+      {editor && <Toolbar editor={editor} isProtected={isProtected} />}
       {loadError ? (
         <p role="alert" className="cb-load-error">
           Couldn&apos;t open this file: {loadError}

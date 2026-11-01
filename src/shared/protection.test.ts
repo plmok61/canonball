@@ -6,8 +6,9 @@ import {
   parseProjectSettings,
   removeProtected
 } from './protection'
+import type { ProtectionSettings } from './types'
 
-const s = (paths: string[]) => ({ version: 2 as const, protected: paths })
+const s = (paths: string[]): ProtectionSettings => ({ version: 2 as const, protected: paths })
 
 describe('isProtected', () => {
   it('matches entries and paths under them by whole segments', () => {

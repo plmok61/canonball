@@ -100,7 +100,7 @@ export async function buildSessionBlock(opts: {
   access: AiAccess
   session: SessionRequest
   mode: 'tools' | 'fallback'
-  prose: (relPath: string) => boolean
+  isProtected: (relPath: string) => boolean
   now: Date
 }): Promise<string> {
   const { access, session, mode } = opts
@@ -122,7 +122,7 @@ export async function buildSessionBlock(opts: {
     try {
       template = (await access.read(TEMPLATE_REL)).content
     } catch {
-      // missing or hidden: use the built-in copy
+      // missing: use the built-in copy
     }
     const n = nextLogNumber(logs)
     parts.push(
@@ -139,7 +139,7 @@ export async function buildSessionBlock(opts: {
   if (mode === 'tools') {
     const packed = await packFiles(
       access,
-      opts.prose,
+      opts.isProtected,
       FALLBACK_BUDGET,
       (p) => p.startsWith('canon/') || p.startsWith('notes/')
     )

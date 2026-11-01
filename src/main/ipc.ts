@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, nativeTheme, safeStorage, BrowserWindow } from 'e
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
-import { loadProjectAccess, setPathAccess, setProsePaths } from './projectSettings'
+import { loadProjectProtection, setProtectedPaths } from './projectSettings'
 import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
 import { createSecretStore } from './ai/secrets'
@@ -19,7 +19,7 @@ import {
   type CloudProvider,
   type ModelChoice
 } from '../shared/ai'
-import type { Access, AppSettings, GrammarLint, ProjectInfo, ThemeSetting } from '../shared/types'
+import type { AppSettings, GrammarLint, ProjectInfo, ThemeSetting } from '../shared/types'
 
 let currentRoot: string | null = null
 
@@ -79,10 +79,6 @@ function stringOrNull(x: unknown): string | null {
   throw new Error('Invalid argument')
 }
 
-function isAccess(a: unknown): a is Access {
-  return a === 'edit' || a === 'read' || a === 'hidden'
-}
-
 function requireRoot(): string {
   if (!currentRoot) throw new Error('No project open')
   return currentRoot
@@ -101,7 +97,7 @@ async function openProject(root: string): Promise<ProjectInfo> {
   proposals.clear()
   currentRoot = root
   await updateSettings({ lastProjectRoot: root })
-  return { root, name: basename(root), tree, access: await loadProjectAccess(root) }
+  return { root, name: basename(root), tree, protection: await loadProjectProtection(root) }
 }
 
 /** Apply the stored theme to native chrome before the window shows, to avoid a flash. */
@@ -139,21 +135,13 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
   ipcMain.handle('canonball:writeDoc', (_e, root: string, relPath: string, content: string) =>
     writeDoc(requireCurrentRoot(currentRoot, root), relPath, content)
   )
-  ipcMain.handle('canonball:getProjectAccess', () => loadProjectAccess(requireRoot()))
-  ipcMain.handle(
-    'canonball:setPathAccess',
-    (_e, root: string, relPath: unknown, access: unknown) => {
-      const r = requireCurrentRoot(currentRoot, root)
-      if (typeof relPath !== 'string' || !isAccess(access)) throw new Error('Invalid argument')
-      return setPathAccess(r, relPath, access)
-    }
-  )
-  ipcMain.handle('canonball:setProsePaths', (_e, root: string, prose: unknown) => {
+  ipcMain.handle('canonball:getProjectProtection', () => loadProjectProtection(requireRoot()))
+  ipcMain.handle('canonball:setProtectedPaths', (_e, root: string, paths: unknown) => {
     const r = requireCurrentRoot(currentRoot, root)
-    if (!Array.isArray(prose) || !prose.every((p) => typeof p === 'string')) {
+    if (!Array.isArray(paths) || !paths.every((p) => typeof p === 'string')) {
       throw new Error('Invalid argument')
     }
-    return setProsePaths(r, prose)
+    return setProtectedPaths(r, paths)
   })
   ipcMain.handle('canonball:lintGrammar', (_e, texts: unknown) =>
     grammar.lint(parseLintRequest(texts))

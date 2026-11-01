@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectAccess, ProjectInfo, TreeNode } from '../../shared/types'
+import type { ProjectInfo, ProjectProtection, TreeNode } from '../../shared/types'
 import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
-import { isProse, nextAccess } from '../../shared/access'
+import { isProtected } from '../../shared/protection'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import { ProseDialog } from './tree/ProseDialog'
@@ -12,7 +12,7 @@ import { ThemePicker } from './theme/ThemePicker'
 import { useTheme } from './theme/useTheme'
 
 const UNREADABLE =
-  "Couldn't read .canonball/project.json. The AI can't see or change any files until it's fixed."
+  "Couldn't read .canonball/project.json. The AI can't change any files until it's fixed."
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -26,9 +26,10 @@ function App(): React.JSX.Element {
   const [pending, setPending] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [refreshed, setRefreshed] = useState<{ root: string; tree: TreeNode[] } | null>(null)
-  const [accessState, setAccessState] = useState<{ root: string; access: ProjectAccess } | null>(
-    null
-  )
+  const [protectionState, setProtectionState] = useState<{
+    root: string
+    protection: ProjectProtection
+  } | null>(null)
   const [proseOpen, setProseOpen] = useState(false)
   const [proseBusy, setProseBusy] = useState(false)
   const [proseError, setProseError] = useState<string | null>(null)
@@ -61,7 +62,7 @@ function App(): React.JSX.Element {
         if (info) {
           setSelectedPath(null)
           setRefreshed(null)
-          setAccessState(null)
+          setProtectionState(null)
           setProseOpen(false)
           setProseError(null)
           setProject(info)
@@ -124,12 +125,12 @@ function App(): React.JSX.Element {
           // keep the last known tree
         })
       window.canonball
-        .getProjectAccess()
-        .then((access) => {
-          if (!saving.current) setAccessState({ root, access })
+        .getProjectProtection()
+        .then((protection) => {
+          if (!saving.current) setProtectionState({ root, protection })
         })
         .catch(() => {
-          // keep the last known access
+          // keep the last known protection
         })
     }
     window.addEventListener('focus', refresh)
@@ -137,7 +138,10 @@ function App(): React.JSX.Element {
   }, [root])
 
   const tree = refreshed && refreshed.root === project?.root ? refreshed.tree : project?.tree
-  const access = accessState && accessState.root === root ? accessState.access : project?.access
+  const protection =
+    protectionState && protectionState.root === root
+      ? protectionState.protection
+      : project?.protection
   const sorted = useMemo(() => sortTree(tree ?? []), [tree])
 
   /** An accepted AI suggestion wrote `relPath`. */
@@ -153,20 +157,6 @@ function App(): React.JSX.Element {
     if (relPath === selectedPath) setReloadToken((n) => n + 1)
   }
 
-  const cycle = (relPath: string): void => {
-    if (!project || !access || saving.current) return
-    saving.current = true
-    setError(null)
-    const at = project.root
-    window.canonball
-      .setPathAccess(at, relPath, nextAccess(access.settings, relPath))
-      .then((next) => setAccessState({ root: at, access: next }))
-      .catch((e) => setError(message(e)))
-      .finally(() => {
-        saving.current = false
-      })
-  }
-
   const openProse = (): void => {
     setProseError(null)
     setProseOpen(true)
@@ -178,11 +168,11 @@ function App(): React.JSX.Element {
   }
 
   const saveProse = (prose: string[]): void => {
-    if (!project || !access || saving.current) return
+    if (!project || !protection || saving.current) return
     if (
-      !access.needsProsePrompt &&
-      new Set(prose).size === new Set(access.settings.prose).size &&
-      prose.every((p) => access.settings.prose.includes(p))
+      !protection.needsProtectPrompt &&
+      new Set(prose).size === new Set(protection.settings.protected).size &&
+      prose.every((p) => protection.settings.protected.includes(p))
     ) {
       setProseOpen(false)
       return
@@ -193,9 +183,9 @@ function App(): React.JSX.Element {
     setProseBusy(true)
     const at = project.root
     window.canonball
-      .setProsePaths(at, prose)
+      .setProtectedPaths(at, prose)
       .then((next) => {
-        setAccessState({ root: at, access: next })
+        setProtectionState({ root: at, protection: next })
         setProseOpen(false)
       })
       .catch((e) => setProseError(message(e)))
@@ -232,9 +222,9 @@ function App(): React.JSX.Element {
     )
   }
 
-  const prompting = !!access && access.needsProsePrompt && !access.unreadable
+  const prompting = !!protection && protection.needsProtectPrompt && !protection.unreadable
   const dialog =
-    access && !access.unreadable && (prompting || proseOpen) ? (
+    protection && !protection.unreadable && (prompting || proseOpen) ? (
       <ProseDialog
         key={prompting ? 'first' : 'edit'}
         tree={sorted}
@@ -243,7 +233,7 @@ function App(): React.JSX.Element {
             ? sorted.some((n) => n.kind === 'folder' && n.name === 'drafts')
               ? ['drafts']
               : []
-            : access.settings.prose
+            : protection.settings.protected
         }
         onDone={saveProse}
         onCancel={prompting ? undefined : closeProse}
@@ -260,7 +250,7 @@ function App(): React.JSX.Element {
             {error}
           </p>
         )}
-        {access?.unreadable && (
+        {protection?.unreadable && (
           <p role="alert" className="cb-app-error">
             {UNREADABLE}
           </p>
@@ -269,11 +259,10 @@ function App(): React.JSX.Element {
           tree={sorted}
           selected={selectedPath}
           onOpen={setSelectedPath}
-          settings={(access ?? project.access).settings}
-          onCycle={cycle}
+          settings={(protection ?? project.protection).settings}
         />
         <footer className="cb-tree-footer">
-          {!access?.unreadable && (
+          {!protection?.unreadable && (
             <button type="button" onClick={openProse}>
               Prose folders…
             </button>
@@ -286,7 +275,7 @@ function App(): React.JSX.Element {
           <Editor
             root={project.root}
             relPath={selectedPath}
-            isProse={isProse((access ?? project.access).settings, selectedPath)}
+            isProtected={isProtected((protection ?? project.protection).settings, selectedPath)}
             reloadToken={reloadToken}
           />
         ) : (

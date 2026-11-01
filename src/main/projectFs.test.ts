@@ -10,7 +10,7 @@ import {
   resolveInside,
   writeDoc
 } from './projectFs'
-import { DEFAULT_PROJECT_SETTINGS, parseProjectSettings } from '../shared/access'
+import { DEFAULT_PROJECT_SETTINGS, parseProjectSettings } from '../shared/protection'
 import type { TreeNode } from '../shared/types'
 
 let tmp: string

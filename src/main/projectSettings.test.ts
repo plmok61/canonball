@@ -2,13 +2,12 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_PROJECT_SETTINGS, EMPTY_SETTINGS } from '../shared/access'
+import { DEFAULT_PROJECT_SETTINGS, EMPTY_SETTINGS } from '../shared/protection'
 import {
   SETTINGS_REL,
-  loadProjectAccess,
+  loadProjectProtection,
   saveProjectSettings,
-  setPathAccess,
-  setProsePaths
+  setProtectedPaths
 } from './projectSettings'
 
 let root: string
@@ -24,8 +23,8 @@ const file = (): string => path.join(root, SETTINGS_REL)
 describe('project settings', () => {
   it('opening a project without settings writes nothing', async () => {
     await fs.mkdir(path.join(root, 'drafts'))
-    const a = await loadProjectAccess(root)
-    expect(a.needsProsePrompt).toBe(true)
+    const a = await loadProjectProtection(root)
+    expect(a.needsProtectPrompt).toBe(true)
     expect(a.unreadable).toBe(false)
     expect(a.settings).toEqual(EMPTY_SETTINGS)
     await expect(fs.access(path.join(root, '.canonball'))).rejects.toThrow()
@@ -37,58 +36,85 @@ describe('project settings', () => {
     const text = await fs.readFile(file(), 'utf8')
     expect(text.endsWith('}\n')).toBe(true)
     expect(text).toBe(JSON.stringify(DEFAULT_PROJECT_SETTINGS, null, 2) + '\n')
-    expect((await loadProjectAccess(root)).settings).toEqual(DEFAULT_PROJECT_SETTINGS)
+    expect((await loadProjectProtection(root)).settings).toEqual(DEFAULT_PROJECT_SETTINGS)
+  })
+
+  it('loads a version 1 file with prose as protected and access ignored', async () => {
+    await fs.mkdir(path.dirname(file()))
+    await fs.writeFile(
+      file(),
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { notes: 'hidden' } })
+    )
+    const a = await loadProjectProtection(root)
+    expect(a.unreadable).toBe(false)
+    expect(a.needsProtectPrompt).toBe(false)
+    expect(a.settings).toEqual({ version: 2, protected: ['drafts'] })
+  })
+
+  it('loading a version 1 file never rewrites it', async () => {
+    await fs.mkdir(path.dirname(file()))
+    const v1 = JSON.stringify({ version: 1, prose: ['drafts'], access: { canon: 'edit' } })
+    await fs.writeFile(file(), v1)
+    const past = new Date('2020-01-01T00:00:00Z')
+    await fs.utimes(file(), past, past)
+    const before = await fs.stat(file())
+    await loadProjectProtection(root)
+    const after = await fs.stat(file())
+    expect(await fs.readFile(file(), 'utf8')).toBe(v1)
+    expect(after.mtimeMs).toBe(before.mtimeMs)
+  })
+
+  it('setProtectedPaths writes version 2 normalized', async () => {
+    const a = await setProtectedPaths(root, ['a', 'a/b'])
+    expect(a.settings).toEqual({ version: 2, protected: ['a'] })
+    expect(await fs.readFile(file(), 'utf8')).toBe(
+      JSON.stringify({ version: 2, protected: ['a'] }, null, 2) + '\n'
+    )
+  })
+
+  it('setProtectedPaths replaces a version 1 file with version 2', async () => {
+    await fs.mkdir(path.dirname(file()))
+    await fs.writeFile(
+      file(),
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { notes: 'hidden' } })
+    )
+    await setProtectedPaths(root, ['drafts', 'notes'])
+    expect(JSON.parse(await fs.readFile(file(), 'utf8'))).toEqual({
+      version: 2,
+      protected: ['drafts', 'notes']
+    })
   })
 
   it('an unreadable file is reported and never overwritten', async () => {
     await fs.mkdir(path.dirname(file()))
     await fs.writeFile(file(), '{oops')
-    const a = await loadProjectAccess(root)
+    const a = await loadProjectProtection(root)
     expect(a.unreadable).toBe(true)
-    expect(a.needsProsePrompt).toBe(false)
-    await expect(setPathAccess(root, 'canon', 'read')).rejects.toThrow(
-      'Project settings file is unreadable'
-    )
-    await expect(setProsePaths(root, ['drafts'])).rejects.toThrow(
+    expect(a.needsProtectPrompt).toBe(false)
+    await expect(setProtectedPaths(root, ['drafts'])).rejects.toThrow(
       'Project settings file is unreadable'
     )
     expect(await fs.readFile(file(), 'utf8')).toBe('{oops')
   })
 
-  it('setPathAccess stores and clears overrides', async () => {
-    await saveProjectSettings(root, DEFAULT_PROJECT_SETTINGS)
-    const a = await setPathAccess(root, 'canon/a.md', 'read')
-    expect(a.settings.access['canon/a.md']).toBe('read')
-    const b = await setPathAccess(root, 'canon/a.md', 'edit')
-    expect(b.settings.access).not.toHaveProperty('canon/a.md')
+  it('setProtectedPaths with nothing ticked still writes the file', async () => {
+    const a = await setProtectedPaths(root, [])
+    expect(a.settings.protected).toEqual([])
+    const again = await loadProjectProtection(root)
+    expect(again.needsProtectPrompt).toBe(false)
+    expect(again.settings.protected).toEqual([])
   })
 
-  it('setPathAccess on a project without the file starts from empty settings', async () => {
-    const a = await setPathAccess(root, 'notes', 'hidden')
-    expect(a.settings).toEqual({ version: 1, prose: [], access: { notes: 'hidden' } })
+  it('setProtectedPaths dedupes entries', async () => {
+    const a = await setProtectedPaths(root, ['drafts', 'drafts'])
+    expect(a.settings.protected).toEqual(['drafts'])
   })
 
-  it('setProsePaths with nothing ticked still writes the file', async () => {
-    const a = await setProsePaths(root, [])
-    expect(a.settings.prose).toEqual([])
-    const again = await loadProjectAccess(root)
-    expect(again.needsProsePrompt).toBe(false)
-    expect(again.settings.prose).toEqual([])
-  })
-
-  it('setProsePaths dedupes entries', async () => {
-    const a = await setProsePaths(root, ['drafts', 'drafts'])
-    expect(a.settings.prose).toEqual(['drafts'])
-  })
-
-  it('concurrent mutations are not lost', async () => {
-    await saveProjectSettings(root, DEFAULT_PROJECT_SETTINGS)
-    const a = setPathAccess(root, 'canon/a.md', 'read')
-    const b = setPathAccess(root, 'notes/b.md', 'hidden')
+  it('concurrent mutations run one after another', async () => {
+    const a = setProtectedPaths(root, ['canon'])
+    const b = setProtectedPaths(root, ['notes'])
     await Promise.all([a, b])
-    const { access } = (await loadProjectAccess(root)).settings
-    expect(access['canon/a.md']).toBe('read')
-    expect(access['notes/b.md']).toBe('hidden')
+    expect((await loadProjectProtection(root)).settings.protected).toEqual(['notes'])
   })
 
   it('a failed mutation does not block the next one', async () => {
@@ -97,12 +123,11 @@ describe('project settings', () => {
     const err = Object.assign(new Error('EACCES'), { code: 'EACCES' })
     const read = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(err)
     try {
-      const first = setPathAccess(root, 'canon', 'read')
-      const second = setProsePaths(root, ['drafts', 'notes'])
+      const first = setProtectedPaths(root, ['canon'])
+      const second = setProtectedPaths(root, ['drafts', 'notes'])
       await expect(first).rejects.toThrow('Project settings file is unreadable')
       const next = await second
-      expect(next.settings.prose).toEqual(['drafts', 'notes'])
-      expect(next.settings.access.canon).toBe('edit')
+      expect(next.settings.protected).toEqual(['drafts', 'notes'])
       expect(next.unreadable).toBe(false)
     } finally {
       read.mockRestore()
@@ -110,9 +135,9 @@ describe('project settings', () => {
   })
 
   it('rejects escaping and empty paths', async () => {
-    await expect(setPathAccess(root, '../x', 'read')).rejects.toThrow('Invalid path')
-    await expect(setPathAccess(root, '', 'read')).rejects.toThrow('Invalid path')
-    await expect(setProsePaths(root, ['a/../b'])).rejects.toThrow('Invalid path')
+    await expect(setProtectedPaths(root, ['a/../b'])).rejects.toThrow('Invalid path')
+    await expect(setProtectedPaths(root, [''])).rejects.toThrow('Invalid path')
+    await expect(setProtectedPaths(root, ['../x'])).rejects.toThrow('Invalid path')
     await expect(fs.access(path.join(root, '.canonball'))).rejects.toThrow()
   })
 })

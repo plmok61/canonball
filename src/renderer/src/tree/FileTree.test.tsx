@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { TreeNode } from '../../../shared/types'
 import { FileTree } from './FileTree'
-import { DEFAULT_PROJECT_SETTINGS } from '../../../shared/access'
+import { DEFAULT_PROJECT_SETTINGS } from '../../../shared/protection'
 
 const tree: TreeNode[] = [
   {
@@ -28,8 +28,7 @@ const base = {
   ],
   selected: null,
   onOpen: vi.fn(),
-  settings: DEFAULT_PROJECT_SETTINGS,
-  onCycle: vi.fn()
+  settings: DEFAULT_PROJECT_SETTINGS
 }
 
 afterEach(cleanup)
@@ -60,44 +59,19 @@ it('clicking a folder collapses it', () => {
   expect(screen.getByText('characters')).toBeInTheDocument()
 })
 
-const badge = (label: string, i = 0): HTMLElement =>
-  screen.getAllByRole('button', { name: `${label}. Click to change.` })[i]
-
-it("shows each row's effective badge", () => {
-  render(<FileTree {...base} />)
-  const canon = screen.getByText('canon').closest('.cb-row')!
-  expect(canon.querySelector('.cb-badge')).toHaveTextContent('✎')
-  expect(canon.querySelector('.cb-badge')).toHaveAttribute('title', 'AI can read and edit')
-  expect(canon.querySelector('.cb-badge')).not.toHaveClass('cb-badge-inherited')
-  const drafts = screen.getByText('drafts').closest('.cb-row')!
-  expect(drafts.querySelector('.cb-badge')).toHaveTextContent('👁')
-  const file = screen.getByText('characters').closest('.cb-row')!
-  expect(file.querySelector('.cb-badge')).toHaveTextContent('✎')
-  expect(file.querySelector('.cb-badge')).toHaveClass('cb-badge-inherited')
-})
-
-it('clicking a badge cycles without opening the file', () => {
-  const onCycle = vi.fn()
-  const onOpen = vi.fn()
-  render(<FileTree {...base} onCycle={onCycle} onOpen={onOpen} />)
-  fireEvent.click(screen.getByText('characters').closest('.cb-row')!.querySelector('.cb-badge')!)
-  expect(onCycle).toHaveBeenCalledWith('canon/characters.md')
-  expect(onOpen).not.toHaveBeenCalled()
-  expect(badge('AI can read and edit')).toBeInTheDocument()
-})
-
-it('prose rows are tagged', () => {
+it('protected rows are tagged', () => {
   render(<FileTree {...base} />)
   expect(screen.getByText('drafts').closest('.cb-row')).toContainElement(
-    screen.getAllByText('prose')[0]
+    screen.getAllByText('protected')[0]
   )
-  expect(screen.getByText('canon').closest('.cb-row')!.querySelector('.cb-prose-tag')).toBeNull()
+  expect(
+    screen.getByText('canon').closest('.cb-row')!.querySelector('.cb-protected-tag')
+  ).toBeNull()
 })
 
-it('the legend lists all three badges', () => {
-  render(<FileTree {...base} />)
-  const legend = screen.getByRole('list', { name: 'AI access' })
-  expect(legend).toHaveTextContent('✎ AI can read and edit')
-  expect(legend).toHaveTextContent('👁 AI can read only')
-  expect(legend).toHaveTextContent("⊘ AI can't see it")
+it('shows no access badges or legend', () => {
+  const { container } = render(<FileTree {...base} />)
+  expect(container.querySelector('.cb-badge')).toBeNull()
+  expect(screen.queryByRole('list', { name: 'AI access' })).toBeNull()
+  expect(container.textContent).not.toMatch(/[✎👁⊘]/u)
 })

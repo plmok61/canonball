@@ -19,7 +19,7 @@ export interface ProjectInfo {
   root: string
   name: string
   tree: TreeNode[]
-  access: ProjectAccess
+  protection: ProjectProtection
 }
 
 export interface DocFile {
@@ -61,14 +61,6 @@ export interface GrammarLint {
   suggestions: GrammarSuggestion[]
 }
 
-export type Access = 'edit' | 'read' | 'hidden'
-
-export interface ProjectSettings {
-  version: 1
-  prose: string[]
-  access: Record<string, Access>
-}
-
 export interface ProtectionSettings {
   version: 2
   protected: string[]
@@ -83,15 +75,6 @@ export interface ProjectProtection {
   unreadable: boolean
 }
 
-export interface ProjectAccess {
-  /** All-read empty settings when missing or unreadable. */
-  settings: ProjectSettings
-  /** True only when the settings file does not exist. */
-  needsProsePrompt: boolean
-  /** True when the file exists but failed to parse or validate. */
-  unreadable: boolean
-}
-
 export interface CanonballApi {
   openProjectDialog(): Promise<ProjectInfo | null>
   newProjectDialog(): Promise<ProjectInfo | null>
@@ -102,11 +85,9 @@ export interface CanonballApi {
   writeDoc(root: string, relPath: string, content: string): Promise<DocFile>
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
-  getProjectAccess(): Promise<ProjectAccess>
+  getProjectProtection(): Promise<ProjectProtection>
   /** Rejects with 'Project changed' if `root` is no longer the open project. */
-  setPathAccess(root: string, relPath: string, access: Access): Promise<ProjectAccess>
-  /** Rejects with 'Project changed' if `root` is no longer the open project. */
-  setProsePaths(root: string, prose: string[]): Promise<ProjectAccess>
+  setProtectedPaths(root: string, paths: string[]): Promise<ProjectProtection>
   /** One array of lints per input text, in the same order. */
   lintGrammar(texts: string[]): Promise<GrammarLint[][]>
   onFlushRequest(handler: () => Promise<void>): void
@@ -124,7 +105,7 @@ export interface CanonballApi {
   /** Starts a stream; events arrive on onChatEvent. */
   startChat(req: ChatRequest): Promise<void>
   cancelChat(requestId: string): Promise<void>
-  /** Rejects with 'Project changed', the expired copy, the changed copy, or an access message. */
+  /** Rejects with 'Project changed', the expired copy, the changed copy, or a protection message. */
   applyProposal(root: string, id: string): Promise<{ relPath: string }>
   rejectProposal(id: string): Promise<void>
   /** Saved chat threads of the open project, newest first. */

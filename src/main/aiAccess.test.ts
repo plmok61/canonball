@@ -4,7 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AccessDenied, createAiAccess } from './aiAccess'
 import { createProject } from './projectFs'
-import { SETTINGS_REL, setPathAccess, setProsePaths } from './projectSettings'
+import { SETTINGS_REL, setProtectedPaths } from './projectSettings'
 
 const TEMPLATE = path.resolve(__dirname, '../../template')
 const CHAPTER = 'drafts/chapters/c.md'
@@ -37,7 +37,7 @@ async function denied(p: Promise<unknown>, message: RegExp): Promise<void> {
 }
 
 describe('AI access layer', () => {
-  it('refuses prose writes however the path is spelled', async () => {
+  it('refuses protected writes however the path is spelled', async () => {
     await fs.symlink('../drafts', path.join(root, 'canon/link'))
     const ai = createAiAccess(root)
     const spellings = [
@@ -49,45 +49,44 @@ describe('AI access layer', () => {
     // Only meaningful on a case-insensitive disk (the macOS default).
     if (existsSync(path.join(root, 'DRAFTS'))) spellings.push('DRAFTS/Chapters/C.md')
     for (const p of spellings) {
-      await denied(ai.write(p, 'AI text'), /Prose is never edited/)
+      await denied(ai.write(p, 'AI text'), /Protected files are never edited/)
     }
     expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
   })
 
-  it('refuses prose writes through a differently normalized folder name', async () => {
+  it('refuses protected writes through a differently normalized folder name', async () => {
     const nfc = 'Entw\u00fcrfe'
     const nfd = nfc.normalize('NFD')
     await fs.mkdir(path.join(root, nfc))
     await fs.writeFile(path.join(root, nfc, 'c.md'), CHAPTER_TEXT)
-    await setProsePaths(root, ['drafts', nfc])
-    const s = JSON.parse(await disk(SETTINGS_REL))
-    s.access[`${nfc}/c.md`] = 'edit'
-    await writeSettings(JSON.stringify(s))
+    await setProtectedPaths(root, ['drafts', nfc])
     const ai = createAiAccess(root)
-    await denied(ai.write(`${nfc}/c.md`, 'AI text'), /Prose is never edited/)
+    await denied(ai.write(`${nfc}/c.md`, 'AI text'), /Protected files are never edited/)
     // A normalization-insensitive disk (the macOS default) finds the folder
     // under either spelling; elsewhere the NFD spelling simply doesn't exist.
     await denied(
       ai.write(`${nfd}/c.md`, 'AI text'),
-      existsSync(path.join(root, nfd)) ? /Prose is never edited/ : /Not available to the AI/
+      existsSync(path.join(root, nfd))
+        ? /Protected files are never edited/
+        : /Not available to the AI/
     )
     expect(await disk(`${nfc}/c.md`)).toBe(CHAPTER_TEXT)
   })
 
-  it('refuses prose writes with a trailing slash', async () => {
+  it('refuses protected writes with a trailing slash', async () => {
     const ai = createAiAccess(root)
-    await denied(ai.write(`${CHAPTER}/`, 'AI text'), /Prose is never edited/)
+    await denied(ai.write(`${CHAPTER}/`, 'AI text'), /Protected files are never edited/)
     expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
   })
 
-  it('refuses prose writes through a file-level symlink', async () => {
+  it('refuses protected writes through a file-level symlink', async () => {
     await fs.symlink('../drafts/chapters/c.md', path.join(root, 'canon/c.md'))
     const ai = createAiAccess(root)
-    await denied(ai.write('canon/c.md', 'AI text'), /Prose is never edited/)
+    await denied(ai.write('canon/c.md', 'AI text'), /Protected files are never edited/)
     expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
   })
 
-  it('refuses creating prose through a dangling symlink', async () => {
+  it('refuses creating a protected file through a dangling symlink', async () => {
     await fs.symlink('../drafts/chapters/new.md', path.join(root, 'canon/new.md'))
     const ai = createAiAccess(root)
     // The link itself occupies the name, so the exclusive create refuses it.
@@ -103,18 +102,18 @@ describe('AI access layer', () => {
     expect(() => ai.canonicalize('../outside.md')).toThrow(AccessDenied)
   })
 
-  it('refuses a hand-edited edit override in a prose folder', async () => {
-    const s = JSON.parse(await disk(SETTINGS_REL))
-    s.access[CHAPTER] = 'edit'
-    await writeSettings(JSON.stringify(s))
+  it('a version 1 edit override never unlocks a protected file', async () => {
+    await writeSettings(
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { [CHAPTER]: 'edit' } })
+    )
     const ai = createAiAccess(root)
-    await denied(ai.write(CHAPTER, 'AI text'), /Prose is never edited/)
+    await denied(ai.write(CHAPTER, 'AI text'), /Protected files are never edited/)
     expect(await disk(CHAPTER)).toBe(CHAPTER_TEXT)
   })
 
-  it('refuses creating files in prose', async () => {
+  it('refuses creating files in a protected folder', async () => {
     const ai = createAiAccess(root)
-    await denied(ai.create('drafts/chapters/new.md', 'x'), /Prose is never edited/)
+    await denied(ai.create('drafts/chapters/new.md', 'x'), /Protected files are never edited/)
     expect(existsSync(path.join(root, 'drafts/chapters/new.md'))).toBe(false)
   })
 
@@ -137,31 +136,57 @@ describe('AI access layer', () => {
     expect(existsSync(path.join(root, 'notes/sub'))).toBe(false)
   })
 
-  it('read-only and hidden are enforced', async () => {
-    const ai = createAiAccess(root)
-    const before = await disk('outline/outline.md')
-    await denied(ai.write('outline/outline.md', 'x'), /may only read/)
-    expect(await disk('outline/outline.md')).toBe(before)
-    expect((await ai.read('memory/style_rules.md')).content).toBe(
-      await disk('memory/style_rules.md')
+  it('reads a file under a former hidden entry', async () => {
+    await fs.writeFile(path.join(root, 'notes/a.md'), 'secret?')
+    await writeSettings(
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { notes: 'hidden' } })
     )
-    await setPathAccess(root, 'memory', 'hidden')
-    await denied(ai.read('memory/style_rules.md'), /hidden/)
-    const list = await ai.list()
-    expect(list.some((f) => f.relPath.startsWith('memory/'))).toBe(false)
+    const ai = createAiAccess(root)
+    expect((await ai.read('notes/a.md')).content).toBe('secret?')
+    expect((await ai.list()).some((f) => f.relPath === 'notes/a.md')).toBe(true)
   })
 
-  it('file-level edit in a read folder allows editing that file only', async () => {
-    await setPathAccess(root, 'outline/outline.md', 'edit')
+  it('reads a protected file', async () => {
     const ai = createAiAccess(root)
-    await ai.write('outline/outline.md', 'x')
-    expect(await disk('outline/outline.md')).toBe('x')
-    await denied(ai.create('outline/new.md', 'y'), /may not create files in this folder: outline/)
+    expect((await ai.read(CHAPTER)).content).toBe(CHAPTER_TEXT)
+  })
+
+  it('writes outline/ which used to be read-only', async () => {
+    await fs.writeFile(path.join(root, 'outline/a.md'), 'old')
+    const ai = createAiAccess(root)
+    await ai.write('outline/a.md', 'x')
+    expect(await disk('outline/a.md')).toBe('x')
+  })
+
+  it('creates at the top level', async () => {
+    const ai = createAiAccess(root)
+    await ai.create('new.md', 'x')
+    expect(await disk('new.md')).toBe('x')
+  })
+
+  it('refuses a create under a protected entry missing on disk', async () => {
+    await setProtectedPaths(root, ['gone'])
+    const ai = createAiAccess(root)
+    await denied(ai.checkCreate('gone/x.md'), /./)
+    // Refused because it is protected, not merely because the folder is missing.
+    await fs.mkdir(path.join(root, 'gone'))
     await denied(
-      ai.create('top.md', 'y'),
-      /may not create files in this folder: the project's top level/
+      ai.checkCreate('gone/x.md'),
+      /Protected files are never edited by the AI: gone\/x\.md/
     )
-    expect(existsSync(path.join(root, 'outline/new.md'))).toBe(false)
+    await denied(ai.create('gone/x.md', 'x'), /Protected files are never edited/)
+    expect(existsSync(path.join(root, 'gone/x.md'))).toBe(false)
+  })
+
+  it('a protected single file is refused but its siblings are not', async () => {
+    await setProtectedPaths(root, ['canon/world.md'])
+    const ai = createAiAccess(root)
+    await denied(ai.write('canon/world.md', 'x'), /Protected files are never edited/)
+    await ai.write('canon/themes.md', 'y')
+    expect(await disk('canon/themes.md')).toBe('y')
+    // The template's drafts are no longer protected once the writer drops them.
+    await ai.write(CHAPTER, 'z')
+    expect(await disk(CHAPTER)).toBe('z')
   })
 
   it('dot-paths and non-markdown are never available', async () => {
@@ -173,29 +198,37 @@ describe('AI access layer', () => {
     expect(existsSync(path.join(root, 'canon/x.txt'))).toBe(false)
   })
 
-  it('an unreadable settings file grants no writes', async () => {
+  it('unreadable settings refuse writes but allow reads', async () => {
     await writeSettings('{oops')
     const ai = createAiAccess(root)
     const before = await disk('canon/characters.md')
     await denied(ai.write('canon/characters.md', 'x'), /Project settings file is unreadable/)
     await denied(ai.create('notes/idea.md', 'x'), /Project settings file is unreadable/)
+    await denied(ai.checkWrite('canon/characters.md'), /Project settings file is unreadable/)
+    await denied(ai.checkCreate('notes/idea.md'), /Project settings file is unreadable/)
     expect(await disk('canon/characters.md')).toBe(before)
     expect(existsSync(path.join(root, 'notes/idea.md'))).toBe(false)
+    expect((await ai.read('canon/characters.md')).content).toBe(before)
+    expect((await ai.read(CHAPTER)).content).toBe(CHAPTER_TEXT)
   })
 
-  it('an unreadable settings file hides everything', async () => {
+  it('unreadable settings list every file as protected', async () => {
     await writeSettings('{oops')
     const ai = createAiAccess(root)
-    expect(await ai.list()).toEqual([])
-    await denied(ai.read('canon/characters.md'), /Project settings file is unreadable/)
-    await denied(ai.read(CHAPTER), /Project settings file is unreadable/)
+    const list = await ai.list()
+    expect(list.length).toBeGreaterThan(0)
+    expect(list.every((f) => f.protected)).toBe(true)
+    expect(list.some((f) => f.relPath === 'canon/characters.md')).toBe(true)
   })
 
-  it('list reports access per file', async () => {
+  it('list marks protected files', async () => {
+    await fs.writeFile(path.join(root, 'drafts/ch1.md'), 'one')
+    await fs.writeFile(path.join(root, 'canon/a.md'), 'a')
+    await setProtectedPaths(root, ['drafts'])
     const ai = createAiAccess(root)
     const list = await ai.list()
-    expect(list.find((f) => f.relPath === 'canon/characters.md')?.access).toBe('edit')
-    expect(list.find((f) => f.relPath === CHAPTER)?.access).toBe('read')
+    expect(list).toContainEqual({ relPath: 'drafts/ch1.md', protected: true })
+    expect(list).toContainEqual({ relPath: 'canon/a.md', protected: false })
     expect(list.some((f) => f.relPath.startsWith('.canonball'))).toBe(false)
     const paths = list.map((f) => f.relPath)
     expect(paths).toEqual([...paths].sort())
@@ -203,13 +236,12 @@ describe('AI access layer', () => {
 
   it('checkWrite and checkCreate refuse what write and create refuse', async () => {
     await fs.writeFile(path.join(root, 'notes/ideas.md'), 'idea')
-    await setPathAccess(root, 'canon/world.md', 'hidden')
+    await setProtectedPaths(root, ['drafts', 'canon/world.md'])
     const ai = createAiAccess(root)
-    await denied(ai.checkWrite(CHAPTER), /Prose is never edited/)
-    await denied(ai.checkWrite('outline/outline.md'), /only read/)
-    await denied(ai.checkWrite('canon/world.md'), /hidden/)
+    await denied(ai.checkWrite(CHAPTER), /Protected files are never edited/)
+    await denied(ai.checkWrite('canon/world.md'), /Protected files are never edited/)
     await denied(ai.checkWrite('notes/missing.md'), /Not available/)
-    await denied(ai.checkCreate(CHAPTER), /Prose is never edited/)
+    await denied(ai.checkCreate(CHAPTER), /Protected files are never edited/)
     await denied(ai.checkCreate('notes/ideas.md'), /File already exists/)
     await denied(ai.checkCreate('notes/nofolder/x.md'), /Not available/)
     expect(await ai.checkWrite('notes/ideas.md')).toBe('notes/ideas.md')

@@ -2,41 +2,41 @@ import { describe, expect, it } from 'vitest'
 import type { AiAccess, AiFile } from '../aiAccess'
 import { createBlockFilter, packFiles, type FallbackBlock } from './fallback'
 
-function fakeAccess(files: Record<string, { access: 'edit' | 'read'; content: string }>): AiAccess {
+function fakeAccess(files: Record<string, { protected: boolean; content: string }>): AiAccess {
   return {
     list: async (): Promise<AiFile[]> =>
       Object.entries(files)
-        .map(([relPath, f]) => ({ relPath, access: f.access }))
+        .map(([relPath, f]) => ({ relPath, protected: f.protected }))
         .sort((a, b) => a.relPath.localeCompare(b.relPath)),
     read: async (relPath: string) => ({ relPath, content: files[relPath].content, mtimeMs: 0 })
   } as unknown as AiAccess
 }
 
-const isProse = (p: string): boolean => p.startsWith('drafts/')
+const isProtected = (p: string): boolean => p.startsWith('drafts/')
 
 describe('packFiles', () => {
   it('packs only included files', async () => {
     const access = fakeAccess({
-      'canon/c.md': { access: 'edit', content: 'canon' },
-      'notes/n.md': { access: 'edit', content: 'note' }
+      'canon/c.md': { protected: false, content: 'canon' },
+      'notes/n.md': { protected: false, content: 'note' }
     })
-    const out = await packFiles(access, isProse, 24_000, (p) => p.startsWith('canon/'))
+    const out = await packFiles(access, isProtected, 24_000, (p) => p.startsWith('canon/'))
     expect(out).toContain('canon/c.md')
     expect(out).not.toContain('notes/n.md')
   })
 
   it('packs files in priority order within budget', async () => {
     const access = fakeAccess({
-      'drafts/ch1.md': { access: 'read', content: 'draft' },
-      'zzz/other.md': { access: 'edit', content: 'other' },
-      'notes/a.md': { access: 'edit', content: 'note' },
-      'canon/c.md': { access: 'edit', content: 'canon' },
-      'memory/m.md': { access: 'edit', content: 'mem' },
-      'notes/big.md': { access: 'edit', content: 'x'.repeat(30_000) },
-      'sessions/s.md': { access: 'edit', content: 'sess' },
-      'outline/o.md': { access: 'edit', content: 'out' }
+      'drafts/ch1.md': { protected: true, content: 'draft' },
+      'zzz/other.md': { protected: false, content: 'other' },
+      'notes/a.md': { protected: false, content: 'note' },
+      'canon/c.md': { protected: false, content: 'canon' },
+      'memory/m.md': { protected: false, content: 'mem' },
+      'notes/big.md': { protected: false, content: 'x'.repeat(30_000) },
+      'sessions/s.md': { protected: false, content: 'sess' },
+      'outline/o.md': { protected: false, content: 'out' }
     })
-    const out = await packFiles(access, isProse)
+    const out = await packFiles(access, isProtected)
     expect(out).not.toContain('memory/m.md')
     const order = [
       'canon/c.md',
@@ -55,22 +55,22 @@ describe('packFiles', () => {
 
   it('skips a file that does not fit but still includes later small ones', async () => {
     const access = fakeAccess({
-      'canon/big.md': { access: 'edit', content: 'x'.repeat(200) },
-      'notes/small.md': { access: 'edit', content: 'ok' }
+      'canon/big.md': { protected: false, content: 'x'.repeat(200) },
+      'notes/small.md': { protected: false, content: 'ok' }
     })
-    const out = await packFiles(access, isProse, 100)
+    const out = await packFiles(access, isProtected, 100)
     expect(out).toContain('notes/small.md')
     expect(out).toContain('Not included (too long to fit): canon/big.md')
   })
 
-  it('formats files with path and access', async () => {
+  it('formats files with path and protection', async () => {
     const access = fakeAccess({
-      'notes/a.md': { access: 'edit', content: 'hello' },
-      'drafts/b.md': { access: 'read', content: 'world' }
+      'notes/a.md': { protected: false, content: 'hello' },
+      'drafts/b.md': { protected: true, content: 'world' }
     })
-    const out = await packFiles(access, isProse)
+    const out = await packFiles(access, isProtected)
     expect(out).toBe(
-      '<file path="notes/a.md" access="edit">\nhello\n</file>\n\n<file path="drafts/b.md" access="read">\nworld\n</file>'
+      '<file path="notes/a.md" protected="false">\nhello\n</file>\n\n<file path="drafts/b.md" protected="true">\nworld\n</file>'
     )
   })
 })

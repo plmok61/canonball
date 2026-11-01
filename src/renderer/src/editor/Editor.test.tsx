@@ -62,7 +62,7 @@ async function ready(): Promise<TipTapEditor> {
 
 it('does not write when a file is opened and closed without edits', async () => {
   const api = stub()
-  const { unmount } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { unmount } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   unmount()
   await Promise.resolve()
@@ -71,12 +71,12 @@ it('does not write when a file is opened and closed without edits', async () => 
 
 it('flushes pending save on file switch', async () => {
   const api = stub()
-  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   act(() => {
     editor.commands.insertContent('typed ')
   })
-  rerender(<Editor root="/p" relPath="canon/b.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/b.md" isProtected={false} />)
   await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
   expect(api.writeDoc.mock.calls[0][0]).toBe('/p')
   expect(api.writeDoc.mock.calls[0][1]).toBe('canon/a.md')
@@ -85,7 +85,7 @@ it('flushes pending save on file switch', async () => {
 
 it('registers a flush handler that saves pending text', async () => {
   const api = stub()
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   act(() => {
     editor.commands.insertContent('typed ')
@@ -95,19 +95,19 @@ it('registers a flush handler that saves pending text', async () => {
   expect(api.writeDoc).toHaveBeenCalledTimes(1)
 })
 
-it('shows the draft banner when the file is prose', async () => {
+it('shows the protected banner when the file is protected', async () => {
   stub()
-  const { rerender } = render(<Editor root="/p" relPath="drafts/ch1.md" isProse={true} />)
+  const { rerender } = render(<Editor root="/p" relPath="drafts/ch1.md" isProtected={true} />)
   await ready()
-  expect(screen.getByText("Draft — AI won't edit")).toBeInTheDocument()
-  rerender(<Editor root="/p" relPath="drafts/ch1.md" isProse={false} />)
+  expect(screen.getByText("Protected — AI won't edit")).toBeInTheDocument()
+  rerender(<Editor root="/p" relPath="drafts/ch1.md" isProtected={false} />)
   await ready()
-  expect(screen.queryByText("Draft — AI won't edit")).toBeNull()
+  expect(screen.queryByText("Protected — AI won't edit")).toBeNull()
 })
 
 it('shows path, word count excluding hints, and saved status', async () => {
   stub('<!-- hidden hint words here -->\n\nOne two three\n')
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   await waitFor(() => expect(screen.getByText('3 words')).toBeInTheDocument())
   expect(screen.getByText('canon/a.md')).toBeInTheDocument()
@@ -116,7 +116,7 @@ it('shows path, word count excluding hints, and saved status', async () => {
 
 it('reloads from disk on focus when clean and mtime changed', async () => {
   const api = stub('old text\n', 1)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   expect(document.querySelector('.ProseMirror')).toHaveTextContent('old text')
   api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
@@ -128,12 +128,12 @@ it('reloads from disk on focus when clean and mtime changed', async () => {
 it('reloadToken reloads a clean editor from disk', async () => {
   const api = stub('old text\n', 1)
   const { rerender } = render(
-    <Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={0} />
+    <Editor root="/p" relPath="canon/a.md" isProtected={false} reloadToken={0} />
   )
   await ready()
   expect(document.querySelector('.ProseMirror')).toHaveTextContent('old text')
   api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
-  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={1} />)
+  rerender(<Editor root="/p" relPath="canon/a.md" isProtected={false} reloadToken={1} />)
   await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('new text'))
   expect(api.writeDoc).not.toHaveBeenCalled()
 })
@@ -141,7 +141,7 @@ it('reloadToken reloads a clean editor from disk', async () => {
 it('reloadToken leaves a dirty editor alone', async () => {
   const api = stub('old text\n', 1)
   const { rerender } = render(
-    <Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={0} />
+    <Editor root="/p" relPath="canon/a.md" isProtected={false} reloadToken={0} />
   )
   const editor = await ready()
   act(() => {
@@ -149,7 +149,7 @@ it('reloadToken leaves a dirty editor alone', async () => {
   })
   api.readDoc.mockResolvedValue({ content: 'new text\n', mtimeMs: 5 })
   const callsBefore = api.readDoc.mock.calls.length
-  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={1} />)
+  rerender(<Editor root="/p" relPath="canon/a.md" isProtected={false} reloadToken={1} />)
   await act(async () => {
     await new Promise((r) => setTimeout(r, 20))
   })
@@ -160,7 +160,7 @@ it('reloadToken leaves a dirty editor alone', async () => {
 
 it('opening a file does not reload it again for an earlier reloadToken', async () => {
   const api = stub('old text\n', 1)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} reloadToken={3} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} reloadToken={3} />)
   await ready()
   await act(async () => {
     await new Promise((r) => setTimeout(r, 20))
@@ -170,7 +170,7 @@ it('opening a file does not reload it again for an earlier reloadToken', async (
 
 it('does not reload on focus when there are unsaved edits', async () => {
   const api = stub('old text\n', 1)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   act(() => {
     editor.commands.insertContent('mine ')
@@ -189,7 +189,7 @@ it('does not reload on focus when there are unsaved edits', async () => {
 
 it('does not write when an edit is undone on a file whose round trip normalizes', async () => {
   const api = stub('_em_\n')
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const end = editor.state.doc.content.size - 1
@@ -208,14 +208,14 @@ it('does not write when an edit is undone on a file whose round trip normalizes'
 it('shows a message when the file cannot be read', async () => {
   const api = stub()
   api.readDoc.mockRejectedValue(new Error('boom'))
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   expect(await screen.findByText("Couldn't open this file: boom")).toBeInTheDocument()
 })
 
 it('shows not saved — retrying when a save fails', async () => {
   const api = stub()
   const editor = await (async () => {
-    render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+    render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
     return ready()
   })()
   api.writeDoc.mockRejectedValue(new Error('disk full'))
@@ -232,7 +232,7 @@ it('shows not saved — retrying when a save fails', async () => {
 
 it('retries and succeeds after a failed save', async () => {
   const api = stub()
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   api.writeDoc.mockRejectedValueOnce(new Error('disk full'))
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -252,13 +252,13 @@ it('retries and succeeds after a failed save', async () => {
 
 it('failed save on file switch is retried and flushed on quit', async () => {
   const api = stub()
-  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   api.writeDoc.mockRejectedValueOnce(new Error('disk full'))
   act(() => {
     editor.commands.insertContent('typed ')
   })
-  rerender(<Editor root="/p" relPath="canon/b.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/b.md" isProtected={false} />)
   await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
   await ready()
   const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
@@ -270,13 +270,13 @@ it('failed save on file switch is retried and flushed on quit', async () => {
 
 it('rejects the flush request when an orphaned save still fails', async () => {
   const api = stub()
-  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   api.writeDoc.mockRejectedValue(new Error('disk full'))
   act(() => {
     editor.commands.insertContent('typed ')
   })
-  rerender(<Editor root="/p" relPath="canon/b.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/b.md" isProtected={false} />)
   await ready()
   const handler = api.onFlushRequest.mock.calls.at(-1)![0] as () => Promise<void>
   await expect(handler()).rejects.toThrow('disk full')
@@ -299,15 +299,15 @@ function diskStub(): { disk: Map<string, string>; api: ReturnType<typeof stub> }
 
 it('reopening a file with a pending orphan save never loses either version (orphan succeeds)', async () => {
   const { disk, api } = diskStub()
-  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   api.writeDoc.mockRejectedValueOnce(new Error('slow disk'))
   act(() => {
     editor.commands.insertContent('typed ')
   })
-  rerender(<Editor root="/p" relPath="canon/b.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/b.md" isProtected={false} />)
   await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
-  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('typed'))
   expect(disk.get('canon/a.md')).toContain('typed')
   // a later edit in the new editor is the final word on disk
@@ -323,16 +323,16 @@ it('reopening a file with a pending orphan save never loses either version (orph
 
 it('reopening a file with a pending orphan save never loses either version (orphan still failing)', async () => {
   const { disk, api } = diskStub()
-  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  const { rerender } = render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   const realWrite = api.writeDoc.getMockImplementation()!
   api.writeDoc.mockRejectedValue(new Error('disk full'))
   act(() => {
     editor.commands.insertContent('typed ')
   })
-  rerender(<Editor root="/p" relPath="canon/b.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/b.md" isProtected={false} />)
   await waitFor(() => expect(api.writeDoc).toHaveBeenCalledTimes(1))
-  rerender(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  rerender(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await waitFor(() => expect(document.querySelector('.ProseMirror')).toHaveTextContent('typed'))
   const editor2 = await ready()
   act(() => {
@@ -351,7 +351,7 @@ it('reopening a file with a pending orphan save never loses either version (orph
 
 it('undo immediately after open neither changes the doc nor writes', async () => {
   const api = stub('# Chapter\n\nShe left.\n')
-  render(<Editor root="/p" relPath="drafts/ch1.md" isProse={false} />)
+  render(<Editor root="/p" relPath="drafts/ch1.md" isProtected={false} />)
   const editor = await ready()
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   act(() => {
@@ -366,7 +366,7 @@ it('undo immediately after open neither changes the doc nor writes', async () =>
 
 it('undo after focus reload does not restore pre-reload text', async () => {
   const api = stub('old text\n', 1)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   // an edit that is saved, so the editor is clean before the reload
   act(() => {
@@ -394,7 +394,7 @@ it('undo after focus reload does not restore pre-reload text', async () => {
 
 it('the page is spellchecked and never autocorrected', async () => {
   stub()
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   const pm = document.querySelector('.ProseMirror')
   expect(pm).toHaveAttribute('spellcheck', 'true')
@@ -404,7 +404,7 @@ it('the page is spellchecked and never autocorrected', async () => {
 
 it('hints and raw nodes opt out of spellcheck', async () => {
   stub('<!-- hint -->\n\nText <span>x</span>\n')
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   const nodes = document.querySelectorAll('.cb-hint, .cb-raw')
   expect(nodes.length).toBeGreaterThan(0)
@@ -445,7 +445,7 @@ async function underlined(): Promise<Element> {
 it('linting never writes the file', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   await underlined()
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -458,7 +458,7 @@ it('linting never writes the file', async () => {
 it('clicking an underline shows the message and fixes; choosing one fixes the text and saves', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   fireEvent.click(await underlined())
   const dialog = await screen.findByRole('dialog', { name: 'Grammar suggestion' })
@@ -477,7 +477,7 @@ it('clicking an underline shows the message and fixes; choosing one fixes the te
 it('right-clicking an underline opens the popover and suppresses the native menu', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   const el = await underlined()
   const notCancelled = fireEvent.contextMenu(el)
@@ -504,7 +504,7 @@ it('right-click on an underline with no fixes leaves the native menu alone', asy
           ]
     })
   )
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   await ready()
   const el = await underlined()
   const notCancelled = fireEvent.contextMenu(el)
@@ -516,7 +516,7 @@ it('right-click on an underline with no fixes leaves the native menu alone', asy
 it('Escape closes the popover without changing the text', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   fireEvent.click(await underlined())
   await screen.findByRole('dialog')
@@ -528,7 +528,7 @@ it('Escape closes the popover without changing the text', async () => {
 it('Ignore removes the underline', async () => {
   const api = stub('She saw the the cat.\n')
   flagTheThe(api)
-  render(<Editor root="/p" relPath="canon/a.md" isProse={false} />)
+  render(<Editor root="/p" relPath="canon/a.md" isProtected={false} />)
   const editor = await ready()
   fireEvent.click(await underlined())
   fireEvent.click(await screen.findByRole('button', { name: 'Ignore' }))

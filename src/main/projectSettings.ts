@@ -2,50 +2,49 @@ import { promises as fsp } from 'fs'
 import path from 'path'
 import {
   EMPTY_SETTINGS,
+  normalizeProtected,
   parseProjectSettings,
-  validPath,
-  withAccess,
-  withProse
-} from '../shared/access'
-import type { Access, ProjectAccess, ProjectSettings } from '../shared/types'
+  validPath
+} from '../shared/protection'
+import type { ProjectProtection, ProtectionSettings } from '../shared/types'
 import { resolveInside, writeDoc } from './projectFs'
 
 export const SETTINGS_REL = '.canonball/project.json'
 
-/** Reads the settings file. Never writes. */
-export async function loadProjectAccess(root: string): Promise<ProjectAccess> {
+/** Reads the settings file. Never writes, even when it is version 1. */
+export async function loadProjectProtection(root: string): Promise<ProjectProtection> {
   let text: string
   try {
     text = await fsp.readFile(resolveInside(root, SETTINGS_REL), 'utf8')
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { settings: EMPTY_SETTINGS, needsProsePrompt: true, unreadable: false }
+      return { settings: EMPTY_SETTINGS, needsProtectPrompt: true, unreadable: false }
     }
-    return { settings: EMPTY_SETTINGS, needsProsePrompt: false, unreadable: true }
+    return { settings: EMPTY_SETTINGS, needsProtectPrompt: false, unreadable: true }
   }
-  let parsed: ProjectSettings | null
+  let parsed: ProtectionSettings | null
   try {
     parsed = parseProjectSettings(JSON.parse(text))
   } catch {
     parsed = null
   }
-  if (!parsed) return { settings: EMPTY_SETTINGS, needsProsePrompt: false, unreadable: true }
-  return { settings: parsed, needsProsePrompt: false, unreadable: false }
+  if (!parsed) return { settings: EMPTY_SETTINGS, needsProtectPrompt: false, unreadable: true }
+  return { settings: parsed, needsProtectPrompt: false, unreadable: false }
 }
 
 export async function saveProjectSettings(
   root: string,
-  s: ProjectSettings
-): Promise<ProjectAccess> {
+  s: ProtectionSettings
+): Promise<ProjectProtection> {
   await fsp.mkdir(path.dirname(resolveInside(root, SETTINGS_REL)), { recursive: true })
   await writeDoc(root, SETTINGS_REL, JSON.stringify(s, null, 2) + '\n')
-  return loadProjectAccess(root)
+  return loadProjectProtection(root)
 }
 
-async function editable(root: string): Promise<ProjectSettings> {
-  const loaded = await loadProjectAccess(root)
+/** An unreadable file is never overwritten: the writer fixes or removes it first. */
+async function requireReadable(root: string): Promise<void> {
+  const loaded = await loadProjectProtection(root)
   if (loaded.unreadable) throw new Error('Project settings file is unreadable')
-  return loaded.settings
 }
 
 /** Tail of the pending mutations per project root, so read-modify-writes never overlap. */
@@ -62,20 +61,11 @@ function serialized<T>(root: string, fn: () => Promise<T>): Promise<T> {
   return run
 }
 
-export async function setPathAccess(
-  root: string,
-  relPath: string,
-  a: Access
-): Promise<ProjectAccess> {
-  if (!validPath(relPath)) throw new Error('Invalid path')
-  return serialized(root, async () =>
-    saveProjectSettings(root, withAccess(await editable(root), relPath, a))
-  )
-}
-
-export async function setProsePaths(root: string, prose: string[]): Promise<ProjectAccess> {
-  if (!prose.every(validPath)) throw new Error('Invalid path')
-  return serialized(root, async () =>
-    saveProjectSettings(root, withProse(await editable(root), [...new Set(prose)]))
-  )
+/** Replaces the protected list, always writing version 2. */
+export async function setProtectedPaths(root: string, paths: string[]): Promise<ProjectProtection> {
+  if (!paths.every(validPath)) throw new Error('Invalid path')
+  return serialized(root, async () => {
+    await requireReadable(root)
+    return saveProjectSettings(root, { version: 2, protected: normalizeProtected(paths) })
+  })
 }

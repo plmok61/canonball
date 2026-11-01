@@ -4,7 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createAiAccess } from '../aiAccess'
 import { createProject } from '../projectFs'
-import { setPathAccess } from '../projectSettings'
+import { SETTINGS_REL } from '../projectSettings'
 import {
   BUILTIN_SESSION_TEMPLATE,
   buildSessionBlock,
@@ -16,7 +16,7 @@ import {
 
 const TEMPLATE = path.resolve(__dirname, '../../../template')
 const NOW = new Date(2026, 9, 31, 23, 30)
-const isProse = (p: string): boolean => p.startsWith('drafts/')
+const isProtected = (p: string): boolean => p.startsWith('drafts/')
 
 let tmp: string
 let root: string
@@ -39,7 +39,7 @@ const build = (
     access: createAiAccess(root),
     session: { goal: 'Find the ending', phase },
     mode,
-    prose: isProse,
+    isProtected,
     now: NOW
   })
 
@@ -98,10 +98,13 @@ describe('buildSessionBlock', () => {
     expect(block).toContain("The writer's goal for this session: Find the ending")
   })
 
-  it('a hidden previous log is left out', async () => {
+  it('a previous log a version 1 file used to hide is still read', async () => {
     await write('sessions/session-1.md', '## Next Session\nAsk about the lighthouse.')
-    await setPathAccess(root, 'sessions/session-1.md', 'hidden')
-    expect(await build('brainstorm')).not.toContain('Where the last session')
+    await write(
+      SETTINGS_REL,
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { sessions: 'hidden' } })
+    )
+    expect(await build('brainstorm')).toContain('Where the last session (sessions/session-1.md)')
   })
 
   it('tools mode packs canon and notes only', async () => {

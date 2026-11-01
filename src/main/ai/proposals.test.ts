@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CHANGED_SINCE_PROPOSAL, EXPIRED_PROPOSAL } from '../../shared/proposals'
 import { AccessDenied, createAiAccess } from '../aiAccess'
 import { createProject } from '../projectFs'
-import { setProsePaths } from '../projectSettings'
+import { setProtectedPaths } from '../projectSettings'
 import { applyEdits, createProposalStore, ProposalError } from './proposals'
 
 const TEMPLATE = path.resolve(__dirname, '../../../template')
@@ -80,7 +80,7 @@ describe('proposal store', () => {
     expect(existsSync(path.join(root, 'notes/new.md'))).toBe(false)
   })
 
-  it('refuses edits to prose', async () => {
+  it('refuses edits to protected files', async () => {
     const store = createProposalStore()
     const err = await store
       .proposeEdit(root, createAiAccess(root), 'drafts/ch1.md', [
@@ -88,7 +88,7 @@ describe('proposal store', () => {
       ])
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(AccessDenied)
-    expect((err as Error).message).toBe('Prose is never edited by the AI: drafts/ch1.md')
+    expect((err as Error).message).toBe('Protected files are never edited by the AI: drafts/ch1.md')
   })
 
   it('refuses an edit that changes nothing', async () => {
@@ -173,11 +173,11 @@ describe('proposal store', () => {
     await expect(store.apply(root, p.id)).rejects.toThrow(CHANGED_SINCE_PROPOSAL)
   })
 
-  it('accept is refused if the folder became prose', async () => {
+  it('accept is refused if the folder became protected', async () => {
     const store = createProposalStore()
     const p = await store.proposeEdit(root, createAiAccess(root), 'notes/ideas.md', swap)
-    await setProsePaths(root, ['drafts', 'notes'])
-    await expect(store.apply(root, p.id)).rejects.toThrow(/Prose is never edited/)
+    await setProtectedPaths(root, ['drafts', 'notes'])
+    await expect(store.apply(root, p.id)).rejects.toThrow(/Protected files are never edited/)
     expect(await disk('notes/ideas.md')).toBe('A fox.\nA hen.\n')
     await expect(store.apply(root, p.id)).rejects.toThrow(EXPIRED_PROPOSAL)
   })

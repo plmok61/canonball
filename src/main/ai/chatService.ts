@@ -1,7 +1,7 @@
 import { PROVIDER_LABEL, type ChatEvent, type ChatRequest } from '../../shared/ai'
-import { isProse } from '../../shared/access'
+import { isProtected as isProtectedIn } from '../../shared/protection'
 import { createAiAccess, type AiAccess } from '../aiAccess'
-import { loadProjectAccess } from '../projectSettings'
+import { loadProjectProtection } from '../projectSettings'
 import {
   toAiMessages,
   type AiMessage,
@@ -123,19 +123,19 @@ export function createChatService(deps: {
           proposals: deps.proposals,
           onProposal: (proposal) => emit({ requestId, kind: 'proposal', proposal })
         })
-        const { settings } = await loadProjectAccess(root)
+        const { settings } = await loadProjectProtection(root)
         if (signal.aborted) return
-        const prose = (relPath: string): boolean => isProse(settings, relPath)
+        const isProtected = (relPath: string): boolean => isProtectedIn(settings, relPath)
         const sessionBlock = async (mode: 'tools' | 'fallback'): Promise<string | undefined> =>
           req.session
-            ? buildSessionBlock({ access, session: req.session, mode, prose, now: now() })
+            ? buildSessionBlock({ access, session: req.session, mode, isProtected, now: now() })
             : undefined
         const fallback = async (): Promise<void> =>
           runFallback(
             access,
             memory,
             await sessionBlock('fallback'),
-            prose,
+            isProtected,
             messages,
             runner,
             request,
@@ -240,7 +240,7 @@ async function runFallback(
   access: AiAccess,
   memory: MemoryFile[],
   session: string | undefined,
-  prose: (relPath: string) => boolean,
+  isProtected: (relPath: string) => boolean,
   messages: AiMessage[],
   runner: ToolRunner,
   request: (
@@ -252,7 +252,7 @@ async function runFallback(
   delta: (text: string) => void,
   signal: AbortSignal
 ): Promise<void> {
-  const files = await packFiles(access, prose)
+  const files = await packFiles(access, isProtected)
   const system = buildInstructions({ mode: 'fallback', memory, files, session })
   const filter = createBlockFilter()
   await request(system, messages, undefined, (text) => delta(filter.push(text)))

@@ -6,14 +6,14 @@ import { createChatService } from './chatService'
 import { createProposalStore } from './proposals'
 import type { ProposalStore } from './proposals'
 import { createProject } from '../projectFs'
-import { setProsePaths } from '../projectSettings'
+import { setProtectedPaths } from '../projectSettings'
 import type { FetchFn, ProviderConfig } from './adapter'
 import type { ChatEvent, ChatRequest } from '../../shared/ai'
 
 const TEMPLATE = path.resolve(__dirname, '../../../template')
 const CH1 = 'The rain kept on.\nIt did not stop.\n'
 const NOTE = 'A tidal city.\n'
-const PROSE_ERROR = 'Prose is never edited by the AI'
+const PROTECTED_ERROR = 'Protected files are never edited by the AI'
 
 type Wire = 'openai' | 'anthropic' | 'google'
 
@@ -140,7 +140,7 @@ async function walk(dir: string, base = dir): Promise<string[]> {
   return out.sort()
 }
 
-describe('the AI never writes prose', () => {
+describe('the AI never writes protected files', () => {
   let tmp: string
   let root: string
   let proposals: ProposalStore
@@ -157,7 +157,7 @@ describe('the AI never writes prose', () => {
   }
 
   beforeEach(async () => {
-    tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'canonball-prose-'))
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'canonball-protected-'))
     root = path.join(tmp, 'project')
     await createProject(root, TEMPLATE)
     await fs.mkdir(path.join(root, 'drafts/chapters'), { recursive: true })
@@ -231,8 +231,8 @@ describe('the AI never writes prose', () => {
         noProposals(events)
         // Round 2 replays the error for the first call; round 3 for both.
         expect(bodies).toHaveLength(3)
-        expect(bodies[1]).toContain(PROSE_ERROR)
-        expect(bodies[2]).toContain(PROSE_ERROR)
+        expect(bodies[1]).toContain(PROTECTED_ERROR)
+        expect(bodies[2]).toContain(PROTECTED_ERROR)
         expect(bodies[1]).toContain('Error: ')
         expect(bodies[2]).toContain('drafts/chapters/ch2.md')
         await expect(fs.access(path.join(root, 'drafts/chapters/ch2.md'))).rejects.toThrow()
@@ -274,7 +274,7 @@ describe('the AI never writes prose', () => {
     const text = textOf(c.events)
     expect(text).not.toContain('<canonball-')
     expect(
-      text.match(/Couldn't suggest that change: Prose is never edited by the AI/g)
+      text.match(/Couldn't suggest that change: Protected files are never edited by the AI/g)
     ).toHaveLength(2)
     await expect(fs.access(path.join(root, 'drafts/chapters/ch2.md'))).rejects.toThrow()
   })
@@ -300,12 +300,12 @@ describe('the AI never writes prose', () => {
     chat.start({ ...request('openai'), session: { goal: 'the ship', phase: 'end' } }, root, c.send)
     await c.ended
     noProposals(c.events)
-    expect(bodies[1]).toContain(PROSE_ERROR)
+    expect(bodies[1]).toContain(PROTECTED_ERROR)
     await expect(fs.access(path.join(root, 'drafts/chapters/session-1.md'))).rejects.toThrow()
   })
 
-  it('a prose folder chosen by the writer is protected too', async () => {
-    await setProsePaths(root, ['manuscript'])
+  it('a folder the writer protects is protected too', async () => {
+    await setProtectedPaths(root, ['manuscript'])
     const { events, bodies } = await runCalls('openai', [
       {
         name: 'propose_edit',
@@ -314,8 +314,8 @@ describe('the AI never writes prose', () => {
       { name: 'create_note', args: { path: 'manuscript/two.md', content: 'More.' } }
     ])
     noProposals(events)
-    expect(bodies[1]).toContain(PROSE_ERROR)
-    expect(bodies[2]).toContain(PROSE_ERROR)
+    expect(bodies[1]).toContain(PROTECTED_ERROR)
+    expect(bodies[2]).toContain(PROTECTED_ERROR)
     await expect(fs.access(path.join(root, 'manuscript/two.md'))).rejects.toThrow()
   })
 
@@ -361,8 +361,8 @@ describe('the AI never writes prose', () => {
     expect(made).toHaveLength(1)
     const id = (made[0] as Extract<ChatEvent, { kind: 'proposal' }>).proposal.id
 
-    // The writer then marks notes as a prose folder; Accept must be refused.
-    await setProsePaths(root, ['notes'])
+    // The writer then protects notes; Accept must be refused.
+    await setProtectedPaths(root, ['notes'])
     await expect(proposals.apply(root, id)).rejects.toThrow()
     expect(await fs.readFile(path.join(root, 'notes/x.md'), 'utf8')).toBe(NOTE)
     await expect(fs.access(path.join(root, 'drafts/x.md'))).rejects.toThrow()

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import fs from 'fs'
 import { promises as fsp } from 'fs'
 import path from 'path'
-import { DEFAULT_PROJECT_SETTINGS } from '../shared/access'
+import { DEFAULT_PROJECT_SETTINGS } from '../shared/protection'
 import type { DocFile, TreeNode } from '../shared/types'
 
 const ESCAPE_MSG = 'Path escapes project'

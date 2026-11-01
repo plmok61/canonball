@@ -31,10 +31,8 @@ const api: CanonballApi = {
   writeDoc: (root, relPath, content) => invoke('canonball:writeDoc', root, relPath, content),
   getSettings: () => invoke('canonball:getSettings'),
   setSettings: (patch) => invoke('canonball:setSettings', patch),
-  getProjectAccess: () => invoke('canonball:getProjectAccess'),
-  setPathAccess: (root, relPath, access) =>
-    invoke('canonball:setPathAccess', root, relPath, access),
-  setProsePaths: (root, prose) => invoke('canonball:setProsePaths', root, prose),
+  getProjectProtection: () => invoke('canonball:getProjectProtection'),
+  setProtectedPaths: (root, paths) => invoke('canonball:setProtectedPaths', root, paths),
   lintGrammar: (texts) => invoke('canonball:lintGrammar', texts),
   onFlushRequest: (handler) => {
     flushHandler = handler

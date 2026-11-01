@@ -7,16 +7,16 @@ export const BASE_INSTRUCTIONS =
 export const TOOL_INSTRUCTIONS = [
   "You can see the writer's project through tools. Use list_files and read_file before answering questions about the project.",
   'You can suggest changes with propose_edit (change an existing file) and create_note (make a new note). These are only suggestions: the writer accepts or rejects each one, and nothing changes until they accept.',
-  "Files in prose folders (drafts) can never be changed, so don't try. Put every change to one file in one propose_edit call."
+  "Protected files (usually the writer's drafts) can never be changed, so don't try. Put every change to one file in one propose_edit call."
 ].join('\n\n')
 
 export const FALLBACK_INSTRUCTIONS = [
-  'You can\'t call tools here, so the files you may see are included below. Each file shows whether you can edit it (access="edit") or only read it (access="read").',
+  'You can\'t call tools here, so the files you may see are included below. Each file shows whether it is protected: you can only read a protected file (protected="true") and can suggest changes to the others (protected="false").',
   'To suggest a change to a file you can edit, write this in your reply, with one or more old/new pairs. Each old text must appear exactly once in the file:',
   '<canonball-edit path="notes/example.md"><old>text to replace</old><new>replacement text</new></canonball-edit>',
   'To suggest a new note in a folder you can edit, write:',
   '<canonball-create path="notes/new-note.md">content of the note</canonball-create>',
-  "These are only suggestions: the writer accepts or rejects each one. Files in prose folders (drafts) can never be changed, so don't try. Put every change to one file in one canonball-edit block."
+  "These are only suggestions: the writer accepts or rejects each one. Protected files (usually the writer's drafts) can never be changed, so don't try. Put every change to one file in one canonball-edit block."
 ].join('\n\n')
 
 const NO_PROJECT = "No project is open, so you can't see any files."
@@ -33,7 +33,7 @@ export interface MemoryFile {
   content: string
 }
 
-/** Visible top-level memory/*.md files, each capped. A file that can't be read is skipped. */
+/** Top-level memory/*.md files, each capped. A file that can't be read is skipped. */
 export async function loadMemory(access: AiAccess): Promise<MemoryFile[]> {
   const out: MemoryFile[] = []
   for (const f of await access.list()) {
@@ -42,7 +42,7 @@ export async function loadMemory(access: AiAccess): Promise<MemoryFile[]> {
       const { content } = await access.read(f.relPath)
       out.push({ relPath: f.relPath, content: content.slice(0, MEMORY_FILE_CAP) })
     } catch {
-      // Hidden or vanished since list(): leave it out.
+      // Vanished since list(): leave it out.
     }
   }
   return out

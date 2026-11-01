@@ -4,15 +4,16 @@
  *
  * Every path is canonicalized to its real on-disk spelling (case, symlinks,
  * `..`) before any check, and the settings file is re-read on every call, so
- * prose can never be written however the path is spelled.
+ * a protected file can never be written however the path is spelled. The AI
+ * reads every available file; it never edits or creates anything protected.
  */
 import fs from 'fs'
 import { promises as fsp } from 'fs'
 import path from 'path'
-import { effectiveAccess, isProse } from '../shared/access'
-import type { DocFile, ProjectSettings, TreeNode } from '../shared/types'
+import { isProtected } from '../shared/protection'
+import type { DocFile, ProtectionSettings, TreeNode } from '../shared/types'
 import { listTree, readDoc, resolveInside, writeDoc } from './projectFs'
-import { loadProjectAccess } from './projectSettings'
+import { loadProjectProtection } from './projectSettings'
 
 export class AccessDenied extends Error {
   constructor(message: string) {
@@ -23,13 +24,14 @@ export class AccessDenied extends Error {
 
 export interface AiFile {
   relPath: string
-  access: 'edit' | 'read'
+  /** Read only for the AI. Every file is protected while the settings file is unreadable. */
+  protected: boolean
 }
 
 export interface AiAccess {
   /** Real on-disk relPath, '/'-separated. Throws AccessDenied on escape. */
   canonicalize(relPath: string): string
-  /** Every .md file the AI can see, sorted by relPath. */
+  /** Every available .md file, sorted by relPath. */
   list(): Promise<AiFile[]>
   read(relPath: string): Promise<DocFile>
   /** Canonical path if write() would be allowed now; throws the same AccessDenied. Writes nothing. */
@@ -98,21 +100,21 @@ export function createAiAccess(root: string): AiAccess {
   }
 
   /**
-   * Fresh settings for this call. Prose entries are also matched in their
-   * canonical spelling, so a hand-typed "DRAFTS" or a symlinked prose folder
-   * still protects the real files.
+   * Fresh settings for this call. Protected entries are also matched in their
+   * canonical spelling, so a hand-typed "DRAFTS" or a symlinked protected
+   * folder still protects the real files.
    */
-  async function settings(): Promise<{ s: ProjectSettings; unreadable: boolean }> {
-    const loaded = await loadProjectAccess(root)
-    const prose = new Set(loaded.settings.prose)
-    for (const p of loaded.settings.prose) {
+  async function settings(): Promise<{ s: ProtectionSettings; unreadable: boolean }> {
+    const loaded = await loadProjectProtection(root)
+    const entries = new Set(loaded.settings.protected)
+    for (const p of loaded.settings.protected) {
       try {
-        prose.add(canonicalize(p))
+        entries.add(canonicalize(p))
       } catch {
         // Escaping or unresolvable entries keep their literal spelling only.
       }
     }
-    return { s: { ...loaded.settings, prose: [...prose] }, unreadable: loaded.unreadable }
+    return { s: { version: 2, protected: [...entries] }, unreadable: loaded.unreadable }
   }
 
   /** Canonical path of an available .md file; throws AccessDenied otherwise. */
@@ -122,41 +124,25 @@ export function createAiAccess(root: string): AiAccess {
     return canonical
   }
 
-  /** Settings for this call; a corrupt file grants nothing, so hidden files stay hidden. */
-  async function readableSettings(): Promise<ProjectSettings> {
+  /** Canonical path if the AI may change it; a corrupt settings file grants no changes. */
+  async function writable(relPath: string): Promise<string> {
+    const canonical = target(relPath)
     const { s, unreadable } = await settings()
     if (unreadable) throw new AccessDenied('Project settings file is unreadable')
-    return s
-  }
-
-  async function writable(relPath: string): Promise<{ canonical: string; s: ProjectSettings }> {
-    const canonical = target(relPath)
-    const s = await readableSettings()
-    if (isProse(s, canonical)) {
-      throw new AccessDenied(`Prose is never edited by the AI: ${relPath}`)
+    if (isProtected(s, canonical)) {
+      throw new AccessDenied(`Protected files are never edited by the AI: ${relPath}`)
     }
-    return { canonical, s }
+    return canonical
   }
 
   async function checkWrite(relPath: string): Promise<string> {
-    const { canonical, s } = await writable(relPath)
-    const a = effectiveAccess(s, canonical)
-    if (a === 'hidden') {
-      throw new AccessDenied(`The writer has hidden this file from the AI: ${relPath}`)
-    }
-    if (a !== 'edit') throw new AccessDenied(`The AI may only read this file: ${relPath}`)
+    const canonical = await writable(relPath)
     if ((await kind(resolveInside(root, canonical))) !== 'file') throw notAvailable(relPath)
     return canonical
   }
 
   async function checkCreate(relPath: string): Promise<string> {
-    const { canonical, s } = await writable(relPath)
-    const folder = canonical.includes('/') ? canonical.slice(0, canonical.lastIndexOf('/')) : ''
-    if (effectiveAccess(s, folder) !== 'edit') {
-      throw new AccessDenied(
-        `The AI may not create files in this folder: ${folder || "the project's top level"}`
-      )
-    }
+    const canonical = await writable(relPath)
     const full = resolveInside(root, canonical)
     if ((await kind(path.dirname(full))) !== 'folder') throw notAvailable(relPath)
     if ((await kind(full)) !== null) throw new AccessDenied(`File already exists: ${relPath}`)
@@ -168,21 +154,15 @@ export function createAiAccess(root: string): AiAccess {
 
     async list() {
       const { s, unreadable } = await settings()
-      if (unreadable) return []
-      const out: AiFile[] = []
-      for (const relPath of flattenFiles(await listTree(root))) {
-        const a = effectiveAccess(s, relPath)
-        if (a !== 'hidden') out.push({ relPath, access: a })
-      }
+      const out: AiFile[] = flattenFiles(await listTree(root)).map((relPath) => ({
+        relPath,
+        protected: unreadable || isProtected(s, relPath)
+      }))
       return out.sort((a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0))
     },
 
     async read(relPath) {
       const canonical = target(relPath)
-      const s = await readableSettings()
-      if (effectiveAccess(s, canonical) === 'hidden') {
-        throw new AccessDenied(`The writer has hidden this file from the AI: ${relPath}`)
-      }
       if ((await kind(resolveInside(root, canonical))) !== 'file') throw notAvailable(relPath)
       return readDoc(root, canonical)
     },

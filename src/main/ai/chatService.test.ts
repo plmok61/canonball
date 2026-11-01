@@ -454,7 +454,7 @@ describe('with a project', () => {
     await c.ended
     expect(c.events.filter((e) => e.kind === 'proposal')).toHaveLength(0)
     expect(textOf(c.events)).toContain(
-      "Couldn't suggest that change: Prose is never edited by the AI"
+      "Couldn't suggest that change: Protected files are never edited by the AI"
     )
     expect(c.events.at(-1)).toEqual({ requestId: 'r1', kind: 'done', stopped: false })
     expect(await disk('drafts/ch1.md')).toBe(CH1)

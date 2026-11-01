@@ -4,7 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createAiAccess } from '../aiAccess'
 import { createProject } from '../projectFs'
-import { setPathAccess } from '../projectSettings'
+import { SETTINGS_REL } from '../projectSettings'
 import {
   BASE_INSTRUCTIONS,
   buildInstructions,
@@ -45,13 +45,15 @@ describe('buildInstructions', () => {
     expect(text.indexOf(NAMES_INTRO)).toBeGreaterThan(-1)
   })
 
-  it('leaves out hidden memory', async () => {
-    await setPathAccess(root, 'memory', 'hidden')
+  it('includes memory a version 1 file used to hide', async () => {
+    await fs.writeFile(
+      path.join(root, SETTINGS_REL),
+      JSON.stringify({ version: 1, prose: ['drafts'], access: { memory: 'hidden' } })
+    )
     const memory = await loadMemory(createAiAccess(root))
-    expect(memory).toEqual([])
     const text = buildInstructions({ mode: 'tools', memory })
-    expect(text).not.toContain(STYLE_INTRO)
-    expect(text).not.toContain(await template('style_rules.md'))
+    expect(text).toContain(STYLE_INTRO)
+    expect(text).toContain(await template('style_rules.md'))
   })
 
   it('includes other memory as project memory', async () => {
@@ -108,6 +110,15 @@ describe('buildInstructions', () => {
     expect(text.endsWith('\n\nSESSION BLOCK')).toBe(true)
     expect(text.indexOf('SESSION BLOCK')).toBeGreaterThan(text.indexOf('<file path="a.md">'))
     expect(buildInstructions({ mode: 'tools', memory: [] })).not.toContain('SESSION BLOCK')
+  })
+
+  it('both modes say protected files can never be changed', () => {
+    const line = "Protected files (usually the writer's drafts) can never be changed, so don't try."
+    expect(TOOL_INSTRUCTIONS).toContain(line)
+    expect(FALLBACK_INSTRUCTIONS).toContain(line)
+    expect(FALLBACK_INSTRUCTIONS).toContain('protected="true"')
+    expect(TOOL_INSTRUCTIONS + FALLBACK_INSTRUCTIONS).not.toContain('prose folders')
+    expect(FALLBACK_INSTRUCTIONS).not.toContain('access=')
   })
 
   it('none mode says no project is open', () => {

@@ -1,17 +1,14 @@
 import { useState } from 'react'
-import type { Access, ProjectSettings, TreeNode } from '../../../shared/types'
+import type { ProtectionSettings, TreeNode } from '../../../shared/types'
 import { displayName } from '../../../shared/paths'
-import { ACCESS_BADGE, effectiveAccess, isExplicit, isProse } from '../../../shared/access'
+import { isProtected } from '../../../shared/protection'
 
 interface Props {
   tree: TreeNode[]
   selected: string | null
   onOpen(relPath: string): void
-  settings: ProjectSettings
-  onCycle(relPath: string): void
+  settings: ProtectionSettings
 }
-
-const ACCESS_ORDER: Access[] = ['edit', 'read', 'hidden']
 
 const rowStyle = (depth: number): React.CSSProperties => ({
   display: 'flex',
@@ -36,29 +33,6 @@ const mainStyle: React.CSSProperties = {
   cursor: 'pointer'
 }
 
-function Badge({
-  relPath,
-  settings,
-  onCycle
-}: {
-  relPath: string
-  settings: ProjectSettings
-  onCycle(relPath: string): void
-}): React.JSX.Element {
-  const { glyph, label } = ACCESS_BADGE[effectiveAccess(settings, relPath)]
-  return (
-    <button
-      type="button"
-      className={isExplicit(settings, relPath) ? 'cb-badge' : 'cb-badge cb-badge-inherited'}
-      aria-label={`${label}. Click to change.`}
-      title={label}
-      onClick={() => onCycle(relPath)}
-    >
-      {glyph}
-    </button>
-  )
-}
-
 function Rows({
   nodes,
   depth,
@@ -66,8 +40,7 @@ function Rows({
   onOpen,
   collapsed,
   toggle,
-  settings,
-  onCycle
+  settings
 }: {
   nodes: TreeNode[]
   depth: number
@@ -75,8 +48,7 @@ function Rows({
   onOpen(relPath: string): void
   collapsed: Set<string>
   toggle(relPath: string): void
-  settings: ProjectSettings
-  onCycle(relPath: string): void
+  settings: ProtectionSettings
 }): React.JSX.Element {
   return (
     <>
@@ -90,9 +62,10 @@ function Rows({
                 <button type="button" style={mainStyle} onClick={() => toggle(n.relPath)}>
                   <span aria-hidden="true">{open ? '▾' : '▸'}</span>
                   <span>{n.name}</span>
-                  {isProse(settings, n.relPath) && <span className="cb-prose-tag">prose</span>}
+                  {isProtected(settings, n.relPath) && (
+                    <span className="cb-protected-tag">protected</span>
+                  )}
                 </button>
-                <Badge relPath={n.relPath} settings={settings} onCycle={onCycle} />
               </div>
               {open && (
                 <div role="group">
@@ -104,7 +77,6 @@ function Rows({
                     collapsed={collapsed}
                     toggle={toggle}
                     settings={settings}
-                    onCycle={onCycle}
                   />
                 </div>
               )}
@@ -117,9 +89,10 @@ function Rows({
             <div className={isSel ? 'cb-row cb-row-selected' : 'cb-row'} style={rowStyle(depth)}>
               <button type="button" style={mainStyle} onClick={() => onOpen(n.relPath)}>
                 <span>{displayName(n.name)}</span>
-                {isProse(settings, n.relPath) && <span className="cb-prose-tag">prose</span>}
+                {isProtected(settings, n.relPath) && (
+                  <span className="cb-protected-tag">protected</span>
+                )}
               </button>
-              <Badge relPath={n.relPath} settings={settings} onCycle={onCycle} />
             </div>
           </div>
         )
@@ -128,7 +101,7 @@ function Rows({
   )
 }
 
-export function FileTree({ tree, selected, onOpen, settings, onCycle }: Props): React.JSX.Element {
+export function FileTree({ tree, selected, onOpen, settings }: Props): React.JSX.Element {
   // Holds toggled folders: for top-level means "collapsed", for nested means "expanded".
   const [toggled, setToggled] = useState<Set<string>>(new Set())
   const toggle = (relPath: string): void =>
@@ -138,26 +111,16 @@ export function FileTree({ tree, selected, onOpen, settings, onCycle }: Props): 
       return next
     })
   return (
-    <>
-      <div role="tree" aria-label="Project files">
-        <Rows
-          nodes={tree}
-          depth={0}
-          selected={selected}
-          onOpen={onOpen}
-          collapsed={toggled}
-          toggle={toggle}
-          settings={settings}
-          onCycle={onCycle}
-        />
-      </div>
-      <ul className="cb-legend" aria-label="AI access">
-        {ACCESS_ORDER.map((a) => (
-          <li key={a}>
-            <span aria-hidden="true">{ACCESS_BADGE[a].glyph}</span> {ACCESS_BADGE[a].label}
-          </li>
-        ))}
-      </ul>
-    </>
+    <div role="tree" aria-label="Project files">
+      <Rows
+        nodes={tree}
+        depth={0}
+        selected={selected}
+        onOpen={onOpen}
+        collapsed={toggled}
+        toggle={toggle}
+        settings={settings}
+      />
+    </div>
   )
 }

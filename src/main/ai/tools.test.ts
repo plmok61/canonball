@@ -4,7 +4,6 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAiAccess } from '../aiAccess'
 import { createProject } from '../projectFs'
-import { setPathAccess } from '../projectSettings'
 import { createProposalStore } from './proposals'
 import { createToolRunner, FILE_TOOLS, type ToolRunner } from './tools'
 import type { ToolCall } from './adapter'
@@ -50,30 +49,32 @@ describe('file tools', () => {
     expect(JSON.stringify(FILE_TOOLS)).not.toContain('additionalProperties')
   })
 
-  it('list_files shows only visible files with their access', async () => {
-    await setPathAccess(root, 'outline', 'hidden')
+  it('list_files shows every file, marking the protected ones', async () => {
+    await fs.writeFile(path.join(root, 'canon/a.md'), 'a')
     const r = await runner().run(call('list_files', {}))
     expect(r.isError).toBe(false)
     expect(r.callId).toBe('c1')
     const lines = r.content.split('\n')
-    expect(lines).toContain('notes/ideas.md (can edit)')
-    expect(lines).toContain('drafts/ch1.md (read only)')
-    expect(r.content).not.toContain('outline/')
+    expect(lines).toContain('drafts/ch1.md (protected, read only)')
+    expect(lines).toContain('canon/a.md')
+    expect(lines).toContain('notes/ideas.md')
+    expect(lines).toContain('outline/outline.md')
   })
 
   it('list_files says so when nothing is visible', async () => {
     for (const f of ['canon', 'notes', 'outline', 'drafts', 'sessions', 'memory']) {
-      await setPathAccess(root, f, 'hidden')
+      await fs.rm(path.join(root, f), { recursive: true, force: true })
     }
     const r = await runner().run(call('list_files', {}))
     expect(r.content).toBe('No files are visible to you.')
   })
 
-  it('read_file returns content and refuses hidden files', async () => {
+  it('read_file returns content, including protected files, and refuses unavailable paths', async () => {
     const ok = await runner().run(call('read_file', { path: 'notes/ideas.md' }))
     expect(ok).toMatchObject({ isError: false, content: 'A tidal city.\nA quiet king.\n' })
-    await setPathAccess(root, 'notes/ideas.md', 'hidden')
-    const bad = await runner().run(call('read_file', { path: 'notes/ideas.md' }))
+    const draft = await runner().run(call('read_file', { path: 'drafts/ch1.md' }))
+    expect(draft).toMatchObject({ isError: false, content: 'The rain kept on.\n' })
+    const bad = await runner().run(call('read_file', { path: '.canonball/project.json' }))
     expect(bad.isError).toBe(true)
     expect(bad.content.startsWith('Error: ')).toBe(true)
   })
@@ -103,7 +104,7 @@ describe('file tools', () => {
     expect(await disk('notes/ideas.md')).toBe('A tidal city.\nA quiet king.\n')
   })
 
-  it('propose_edit on a draft returns the prose error', async () => {
+  it('propose_edit on a draft returns the protected error', async () => {
     const r = await runner().run(
       call('propose_edit', {
         path: 'drafts/ch1.md',
@@ -111,7 +112,7 @@ describe('file tools', () => {
       })
     )
     expect(r.isError).toBe(true)
-    expect(r.content).toBe('Error: Prose is never edited by the AI: drafts/ch1.md')
+    expect(r.content).toBe('Error: Protected files are never edited by the AI: drafts/ch1.md')
     expect(proposals).toHaveLength(0)
     expect(await disk('drafts/ch1.md')).toBe('The rain kept on.\n')
   })

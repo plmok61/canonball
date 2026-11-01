@@ -10,21 +10,21 @@ export const FALLBACK_BUDGET = 24_000
 
 const GROUP_ORDER = ['canon/', 'notes/', 'outline/', 'sessions/']
 
-function groupOf(relPath: string, prose: (relPath: string) => boolean): number {
-  if (prose(relPath)) return GROUP_ORDER.length + 1
+function groupOf(relPath: string, isProtected: (relPath: string) => boolean): number {
+  if (isProtected(relPath)) return GROUP_ORDER.length + 1
   const i = GROUP_ORDER.findIndex((prefix) => relPath.startsWith(prefix))
   return i === -1 ? GROUP_ORDER.length : i
 }
 
 export async function packFiles(
   access: AiAccess,
-  prose: (relPath: string) => boolean,
+  isProtected: (relPath: string) => boolean,
   budget: number = FALLBACK_BUDGET,
   include: (relPath: string) => boolean = () => true
 ): Promise<string> {
   const files = (await access.list())
     .filter((f) => !f.relPath.startsWith('memory/') && include(f.relPath)) // memory is already in the instructions
-    .map((f) => ({ ...f, group: groupOf(f.relPath, prose) }))
+    .map((f) => ({ ...f, group: groupOf(f.relPath, isProtected) }))
     .sort(
       (a, b) => a.group - b.group || (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0)
     )
@@ -37,9 +37,9 @@ export async function packFiles(
     try {
       content = (await access.read(f.relPath)).content
     } catch {
-      continue // hidden or vanished since list()
+      continue // vanished since list()
     }
-    const entry = `<file path="${f.relPath}" access="${f.access}">\n${content}\n</file>`
+    const entry = `<file path="${f.relPath}" protected="${f.protected}">\n${content}\n</file>`
     if (used + entry.length > budget) {
       skipped.push(f.relPath)
       continue

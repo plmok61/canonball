@@ -13,9 +13,9 @@ vi.mock('./editor/saveRegistry', async (importOriginal) => ({
 type MenuCommand = 'open-project' | 'new-project' | 'open-settings'
 let menu: ((cmd: MenuCommand) => void) | null = null
 
-const noAccess = {
-  settings: { version: 1, prose: [], access: {} },
-  needsProsePrompt: false,
+const noProtection = {
+  settings: { version: 2 as const, protected: [] as string[] },
+  needsProtectPrompt: false,
   unreadable: false
 }
 
@@ -26,12 +26,11 @@ function stub(
   | 'openProjectDialog'
   | 'newProjectDialog'
   | 'openProject'
-  | 'setPathAccess'
-  | 'getProjectAccess'
-  | 'setProsePaths',
+  | 'getProjectProtection'
+  | 'setProtectedPaths',
   Mock
 > {
-  const info = { root: '/p', name: 'p', tree: [], access: noAccess }
+  const info = { root: '/p', name: 'p', tree: [], protection: noProtection }
   const api = {
     getSettings: vi.fn().mockResolvedValue({ lastProjectRoot, theme: 'system' }),
     openProject: vi.fn().mockResolvedValue(info),
@@ -53,9 +52,8 @@ function stub(
     applyProposal: vi.fn(),
     rejectProposal: vi.fn().mockResolvedValue(undefined),
     onChatEvent: vi.fn(() => () => {}),
-    getProjectAccess: vi.fn().mockResolvedValue(noAccess),
-    setPathAccess: vi.fn().mockResolvedValue(noAccess),
-    setProsePaths: vi.fn().mockResolvedValue(noAccess),
+    getProjectProtection: vi.fn().mockResolvedValue(noProtection),
+    setProtectedPaths: vi.fn().mockResolvedValue(noProtection),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
       return () => {
@@ -133,7 +131,7 @@ it('Open Project from the menu awaits the flush before showing the dialog', asyn
     root: '/q',
     name: 'q',
     tree: [{ name: 'other.md', relPath: 'other.md', kind: 'file' }],
-    access: noAccess
+    protection: noProtection
   })
   render(<App />)
   await screen.findByTestId('tree-panel')
@@ -159,29 +157,12 @@ it('New Project from the menu does not switch when the flush fails', async () =>
   expect(screen.getByTestId('tree-panel')).toBeInTheDocument()
 })
 
-const withCanon = (access: 'edit' | 'read'): typeof noAccess => ({
-  ...noAccess,
-  settings: { version: 1 as const, prose: [], access: { canon: access } }
+const withCanon = (isProtected: boolean): typeof noProtection => ({
+  ...noProtection,
+  settings: { version: 2 as const, protected: isProtected ? ['canon'] : [] }
 })
 
 const canonTree = [{ name: 'canon', relPath: 'canon', kind: 'folder' as const, children: [] }]
-
-it('clicking a badge saves the next access', async () => {
-  const api = stub('/p')
-  api.openProject.mockResolvedValue({
-    root: '/p',
-    name: 'p',
-    tree: canonTree,
-    access: withCanon('edit')
-  })
-  api.setPathAccess.mockResolvedValue(withCanon('read'))
-  render(<App />)
-  const row = (await screen.findByText('canon')).closest('.cb-row')!
-  expect(row.querySelector('.cb-badge')).toHaveTextContent('✎')
-  fireEvent.click(row.querySelector('.cb-badge')!)
-  await waitFor(() => expect(row.querySelector('.cb-badge')).toHaveTextContent('👁'))
-  expect(api.setPathAccess).toHaveBeenCalledWith('/p', 'canon', 'read')
-})
 
 it('warns when project settings are unreadable', async () => {
   const api = stub('/p')
@@ -189,11 +170,11 @@ it('warns when project settings are unreadable', async () => {
     root: '/p',
     name: 'p',
     tree: [],
-    access: { ...noAccess, unreadable: true }
+    protection: { ...noProtection, unreadable: true }
   })
   render(<App />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    "Couldn't read .canonball/project.json. The AI can't see or change any files until it's fixed."
+    "Couldn't read .canonball/project.json. The AI can't change any files until it's fixed."
   )
 })
 
@@ -203,76 +184,61 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void } {
   return { promise, resolve }
 }
 
-const canonBadge = async (): Promise<HTMLElement> =>
-  (await screen.findByText('canon')).closest('.cb-row')!.querySelector('.cb-badge') as HTMLElement
+const canonTag = async (): Promise<Element | null> =>
+  (await screen.findByText('canon')).closest('.cb-row')!.querySelector('.cb-protected-tag')
 
-it('ignores a second badge click while a save is pending', async () => {
+it("discards an old project's focus-refresh protection after a switch", async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
     root: '/p',
     name: 'p',
     tree: canonTree,
-    access: withCanon('edit')
+    protection: withCanon(false)
   })
-  const save = deferred<typeof noAccess>()
-  api.setPathAccess.mockReturnValue(save.promise)
-  render(<App />)
-  const b = await canonBadge()
-  fireEvent.click(b)
-  fireEvent.click(b)
-  expect(api.setPathAccess).toHaveBeenCalledTimes(1)
-  await act(async () => save.resolve(withCanon('read')))
-  await waitFor(() => expect(b).toHaveTextContent('👁'))
-})
-
-it("discards an old project's focus-refresh access after a switch", async () => {
-  const api = stub('/p')
-  api.openProject.mockResolvedValue({
-    root: '/p',
-    name: 'p',
-    tree: canonTree,
-    access: withCanon('edit')
-  })
-  const late = deferred<typeof noAccess>()
-  api.getProjectAccess.mockReturnValue(late.promise)
+  const late = deferred<typeof noProtection>()
+  api.getProjectProtection.mockReturnValue(late.promise)
   api.openProjectDialog.mockResolvedValue({
     root: '/q',
     name: 'q',
     tree: canonTree,
-    access: withCanon('read')
+    protection: withCanon(true)
   })
   render(<App />)
-  await canonBadge()
+  expect(await canonTag()).toBeNull()
   act(() => {
     window.dispatchEvent(new Event('focus'))
   })
   act(() => menu!('open-project'))
   await waitFor(() => expect(api.openProjectDialog).toHaveBeenCalled())
-  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('👁'))
-  await act(async () => late.resolve(withCanon('edit')))
-  expect(await canonBadge()).toHaveTextContent('👁')
+  await waitFor(async () => expect(await canonTag()).not.toBeNull())
+  await act(async () => late.resolve(withCanon(false)))
+  expect(await canonTag()).not.toBeNull()
 })
 
-it("shows the new project's access after a switch", async () => {
+it("shows the new project's protection after a switch", async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
     root: '/p',
     name: 'p',
     tree: canonTree,
-    access: withCanon('edit')
+    protection: withCanon(false)
   })
-  api.setPathAccess.mockResolvedValue(withCanon('read'))
+  api.setProtectedPaths.mockResolvedValue(withCanon(true))
   api.openProjectDialog.mockResolvedValue({
     root: '/q',
     name: 'q',
     tree: canonTree,
-    access: withCanon('edit')
+    protection: withCanon(false)
   })
   render(<App />)
-  fireEvent.click(await canonBadge())
-  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('👁'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'canon' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', ['canon']))
+  await waitFor(async () => expect(await canonTag()).not.toBeNull())
   act(() => menu!('open-project'))
-  await waitFor(async () => expect(await canonBadge()).toHaveTextContent('✎'))
+  await waitFor(() => expect(api.openProjectDialog).toHaveBeenCalled())
+  await waitFor(async () => expect(await canonTag()).toBeNull())
 })
 
 const draftsTree = [
@@ -284,20 +250,20 @@ const draftsTree = [
   }
 ]
 
-it('asks which folders hold prose when the project has no settings', async () => {
+it('asks which folders to protect when the project has no settings', async () => {
   const api = stub('/p')
-  const prompt = { ...noAccess, needsProsePrompt: true }
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access: prompt })
-  api.setProsePaths.mockResolvedValue({
-    ...noAccess,
-    settings: { version: 1, prose: ['drafts'], access: {} }
+  const prompt = { ...noProtection, needsProtectPrompt: true }
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, protection: prompt })
+  api.setProtectedPaths.mockResolvedValue({
+    ...noProtection,
+    settings: { version: 2, protected: ['drafts'] }
   })
   render(<App />)
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeChecked()
   expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-  await waitFor(() => expect(api.setProsePaths).toHaveBeenCalledWith('/p', ['drafts']))
+  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', ['drafts']))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 })
 
@@ -310,56 +276,37 @@ it('does not ask when settings exist', async () => {
 
 it('Prose folders… reopens the dialog', async () => {
   const api = stub('/p')
-  const access = { ...noAccess, settings: { version: 1, prose: ['drafts'], access: {} } }
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access })
+  const protection = { ...noProtection, settings: { version: 2, protected: ['drafts'] } }
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, protection })
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
   expect(screen.getByRole('checkbox', { name: 'drafts' })).toBeChecked()
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(api.setProsePaths).not.toHaveBeenCalled()
+  expect(api.setProtectedPaths).not.toHaveBeenCalled()
 })
 
-it('keeps the dialog open and shows the error inside it when saving prose folders fails', async () => {
+it('keeps the dialog open and shows the error inside it when saving protected folders fails', async () => {
   const api = stub('/p')
   api.openProject.mockResolvedValue({
     root: '/p',
     name: 'p',
     tree: draftsTree,
-    access: { ...noAccess, needsProsePrompt: true }
+    protection: { ...noProtection, needsProtectPrompt: true }
   })
-  api.setProsePaths.mockRejectedValueOnce(new Error('disk full'))
+  api.setProtectedPaths.mockRejectedValueOnce(new Error('disk full'))
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
   const dialog = screen.getByRole('dialog')
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('disk full')
   expect(screen.getAllByText('disk full')).toHaveLength(1)
   await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled())
-  const retry = deferred<typeof noAccess>()
-  api.setProsePaths.mockReturnValueOnce(retry.promise)
+  const retry = deferred<typeof noProtection>()
+  api.setProtectedPaths.mockReturnValueOnce(retry.promise)
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(within(dialog).queryByRole('alert')).toBeNull()
-  await act(async () => retry.resolve(noAccess))
+  await act(async () => retry.resolve(noProtection))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(screen.queryByRole('alert')).toBeNull()
-})
-
-it('a successful badge cycle clears the previous error', async () => {
-  const api = stub('/p')
-  api.openProject.mockResolvedValue({
-    root: '/p',
-    name: 'p',
-    tree: canonTree,
-    access: withCanon('edit')
-  })
-  api.setPathAccess.mockRejectedValueOnce(new Error('disk full'))
-  api.setPathAccess.mockResolvedValueOnce(withCanon('read'))
-  render(<App />)
-  const b = await canonBadge()
-  fireEvent.click(b)
-  expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
-  fireEvent.click(b)
-  await waitFor(() => expect(b).toHaveTextContent('👁'))
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
@@ -369,25 +316,25 @@ it('hides Prose folders… when settings are unreadable', async () => {
     root: '/p',
     name: 'p',
     tree: [],
-    access: { ...noAccess, unreadable: true }
+    protection: { ...noProtection, unreadable: true }
   })
   render(<App />)
   await screen.findByTestId('tree-panel')
   expect(screen.queryByRole('button', { name: 'Prose folders…' })).toBeNull()
 })
 
-it("doesn't write when the prose list is unchanged, even with unlisted entries", async () => {
+it("doesn't write when the protected list is unchanged, even with unlisted entries", async () => {
   const api = stub('/p')
-  const access = {
-    ...noAccess,
-    settings: { version: 1, prose: ['drafts', 'drafts/ch1.md'], access: {} }
+  const protection = {
+    ...noProtection,
+    settings: { version: 2, protected: ['drafts', 'drafts/ch1.md'] }
   }
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, access })
+  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: draftsTree, protection })
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Prose folders…' }))
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(api.setProsePaths).not.toHaveBeenCalled()
+  expect(api.setProtectedPaths).not.toHaveBeenCalled()
 })
 
 it('an accepted change refreshes the tree and reloads the open file', async () => {
@@ -410,7 +357,12 @@ it('an accepted change refreshes the tree and reloads the open file', async () =
       children: [{ name: 'ideas.md', relPath: 'notes/ideas.md', kind: 'file' as const }]
     }
   ]
-  api.openProject.mockResolvedValue({ root: '/p', name: 'p', tree: notesTree, access: noAccess })
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: notesTree,
+    protection: noProtection
+  })
   const thread = {
     version: 1,
     id: '33333333-3333-4333-8333-333333333333',
