@@ -90,6 +90,7 @@ export interface CanonballApi {
   getProjectProtection(): Promise<ProjectProtection>
   /** Rejects with 'Project changed' if `root` is no longer the open project. */
   setProtectedPaths(root: string, paths: string[]): Promise<ProjectProtection>
+  changeProtection(root: string, kind: TreeMenuKind, relPath: string): Promise<ProjectProtection>
   showTreeMenu(kind: TreeMenuKind): Promise<boolean>
   /** One array of lints per input text, in the same order. */
   lintGrammar(texts: string[]): Promise<GrammarLint[][]>

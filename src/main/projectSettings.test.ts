@@ -6,6 +6,7 @@ import { DEFAULT_PROJECT_SETTINGS, EMPTY_SETTINGS } from '../shared/protection'
 import {
   SETTINGS_REL,
   loadProjectProtection,
+  changeProtection,
   saveProjectSettings,
   setProtectedPaths
 } from './projectSettings'
@@ -139,5 +140,41 @@ describe('project settings', () => {
     await expect(setProtectedPaths(root, [''])).rejects.toThrow('Invalid path')
     await expect(setProtectedPaths(root, ['../x'])).rejects.toThrow('Invalid path')
     await expect(fs.access(path.join(root, '.canonball'))).rejects.toThrow()
+  })
+
+  it('changeProtection applies to the file on disk, not a stale list', async () => {
+    await setProtectedPaths(root, ['drafts'])
+    await fs.writeFile(file(), JSON.stringify({ version: 2, protected: ['drafts', 'notes'] }))
+    const out = await changeProtection(root, 'protect', 'canon')
+    expect(JSON.parse(await fs.readFile(file(), 'utf8')).protected).toEqual([
+      'drafts',
+      'notes',
+      'canon'
+    ])
+    expect(out.settings.protected).toEqual(['drafts', 'notes', 'canon'])
+  })
+
+  it('changeProtection with no effect writes nothing', async () => {
+    await setProtectedPaths(root, ['drafts'])
+    const past = new Date('2020-01-01T00:00:00Z')
+    await fs.utimes(file(), past, past)
+    const before = await fs.readFile(file(), 'utf8')
+    const out = await changeProtection(root, 'unprotect', 'canon')
+    expect(await fs.readFile(file(), 'utf8')).toBe(before)
+    expect((await fs.stat(file())).mtimeMs).toBe(past.getTime())
+    expect(out.settings.protected).toEqual(['drafts'])
+  })
+
+  it('changeProtection refuses an unreadable file', async () => {
+    await fs.mkdir(path.dirname(file()))
+    await fs.writeFile(file(), '{oops')
+    await expect(changeProtection(root, 'protect', 'drafts')).rejects.toThrow(
+      'Project settings file is unreadable'
+    )
+    expect(await fs.readFile(file(), 'utf8')).toBe('{oops')
+  })
+
+  it('changeProtection rejects an invalid path', async () => {
+    await expect(changeProtection(root, 'protect', '../x')).rejects.toThrow('Invalid path')
   })
 })

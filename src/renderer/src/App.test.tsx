@@ -28,6 +28,7 @@ function stub(
   | 'openProject'
   | 'getProjectProtection'
   | 'setProtectedPaths'
+  | 'changeProtection'
   | 'showTreeMenu',
   Mock
 > {
@@ -55,6 +56,7 @@ function stub(
     onChatEvent: vi.fn(() => () => {}),
     getProjectProtection: vi.fn().mockResolvedValue(noProtection),
     setProtectedPaths: vi.fn().mockResolvedValue(noProtection),
+    changeProtection: vi.fn().mockResolvedValue(noProtection),
     showTreeMenu: vi.fn().mockResolvedValue(true),
     onMenuCommand: vi.fn((handler: (cmd: MenuCommand) => void) => {
       menu = handler
@@ -430,7 +432,7 @@ it('right-click protect saves', async () => {
   const api = menuProject()
   render(<App />)
   await rightClick('Project', 'notes')
-  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', ['drafts', 'notes']))
+  await waitFor(() => expect(api.changeProtection).toHaveBeenCalledWith('/p', 'protect', 'notes'))
   expect(api.showTreeMenu).toHaveBeenCalledWith('protect')
 })
 
@@ -438,8 +440,24 @@ it('stop protecting saves', async () => {
   const api = menuProject()
   render(<App />)
   await rightClick('Protected', 'drafts')
-  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledWith('/p', []))
+  await waitFor(() =>
+    expect(api.changeProtection).toHaveBeenCalledWith('/p', 'unprotect', 'drafts')
+  )
   expect(api.showTreeMenu).toHaveBeenCalledWith('unprotect')
+})
+
+it('no menu while the settings file is unreadable', async () => {
+  const api = menuProject()
+  api.openProject.mockResolvedValue({
+    root: '/p',
+    name: 'p',
+    tree: menuTree,
+    protection: { ...noProtection, unreadable: true }
+  })
+  render(<App />)
+  await rightClick('Project', 'notes')
+  await act(async () => {})
+  expect(api.showTreeMenu).not.toHaveBeenCalled()
 })
 
 it('a dismissed menu writes nothing', async () => {
@@ -449,26 +467,26 @@ it('a dismissed menu writes nothing', async () => {
   await rightClick('Project', 'notes')
   await waitFor(() => expect(api.showTreeMenu).toHaveBeenCalled())
   await act(async () => {})
-  expect(api.setProtectedPaths).not.toHaveBeenCalled()
+  expect(api.changeProtection).not.toHaveBeenCalled()
 })
 
 it('a second action during a save is ignored', async () => {
   const api = menuProject()
   const d = deferred<typeof draftsProtected>()
-  api.setProtectedPaths.mockReturnValue(d.promise)
+  api.changeProtection.mockReturnValue(d.promise)
   render(<App />)
   await rightClick('Project', 'notes')
-  await waitFor(() => expect(api.setProtectedPaths).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(api.changeProtection).toHaveBeenCalledTimes(1))
   await rightClick('Project', 'notes')
   await act(async () => {})
-  expect(api.setProtectedPaths).toHaveBeenCalledTimes(1)
+  expect(api.changeProtection).toHaveBeenCalledTimes(1)
   expect(api.showTreeMenu).toHaveBeenCalledTimes(1)
   await act(async () => d.resolve(draftsProtected))
 })
 
 it('a failed save shows the app error and leaves the sections unchanged', async () => {
   const api = menuProject()
-  api.setProtectedPaths.mockRejectedValue(new Error('disk full'))
+  api.changeProtection.mockRejectedValue(new Error('disk full'))
   render(<App />)
   await rightClick('Project', 'notes')
   expect(await screen.findByRole('alert')).toHaveTextContent('disk full')
@@ -479,7 +497,7 @@ it('a failed save shows the app error and leaves the sections unchanged', async 
 
 it("protecting the open file's folder updates the banner", async () => {
   const api = menuProject()
-  api.setProtectedPaths.mockResolvedValue({
+  api.changeProtection.mockResolvedValue({
     ...noProtection,
     settings: { version: 2, protected: ['notes'] }
   })

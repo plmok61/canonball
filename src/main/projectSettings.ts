@@ -2,11 +2,13 @@ import { promises as fsp } from 'fs'
 import path from 'path'
 import {
   EMPTY_SETTINGS,
+  addProtected,
   normalizeProtected,
   parseProjectSettings,
+  removeProtected,
   validPath
 } from '../shared/protection'
-import type { ProjectProtection, ProtectionSettings } from '../shared/types'
+import type { ProjectProtection, ProtectionSettings, TreeMenuKind } from '../shared/types'
 import { resolveInside, writeDoc } from './projectFs'
 
 export const SETTINGS_REL = '.canonball/project.json'
@@ -67,5 +69,26 @@ export async function setProtectedPaths(root: string, paths: string[]): Promise<
   return serialized(root, async () => {
     await requireReadable(root)
     return saveProjectSettings(root, { version: 2, protected: normalizeProtected(paths) })
+  })
+}
+
+/**
+ * Protects or unprotects one path against the list on disk right now, so an
+ * outside edit is never overwritten by a stale list. Writes only on a change.
+ */
+export async function changeProtection(
+  root: string,
+  kind: TreeMenuKind,
+  relPath: string
+): Promise<ProjectProtection> {
+  if (!validPath(relPath)) throw new Error('Invalid path')
+  return serialized(root, async () => {
+    const fresh = await loadProjectProtection(root)
+    if (fresh.unreadable) throw new Error('Project settings file is unreadable')
+    const current = fresh.settings.protected
+    const next =
+      kind === 'protect' ? addProtected(current, relPath) : removeProtected(current, relPath)
+    if (next.length === current.length && next.every((p, i) => p === current[i])) return fresh
+    return saveProjectSettings(root, { version: 2, protected: next })
   })
 }

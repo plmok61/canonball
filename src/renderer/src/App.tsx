@@ -3,7 +3,7 @@ import type { ProjectInfo, ProjectProtection, TreeNode } from '../../shared/type
 import { ChatPanel } from './chat/ChatPanel'
 import { Editor } from './editor/Editor'
 import { flushAll } from './editor/saveRegistry'
-import { addProtected, isProtected, removeProtected } from '../../shared/protection'
+import { isProtected } from '../../shared/protection'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { FileTree } from './tree/FileTree'
 import { ProtectDialog } from './tree/ProtectDialog'
@@ -175,22 +175,21 @@ function App(): React.JSX.Element {
   }
 
   const onRowMenu = async (relPath: string, inProtected: boolean): Promise<void> => {
-    if (!project || !protection || saving.current) return
+    if (!project || !protection || protection.unreadable || saving.current) return
     const at = project.root
+    const kind = inProtected ? 'unprotect' : 'protect'
     let chosen: boolean
     try {
-      chosen = await window.canonball.showTreeMenu(inProtected ? 'unprotect' : 'protect')
+      chosen = await window.canonball.showTreeMenu(kind)
     } catch (e) {
       setError(message(e))
       return
     }
     if (!chosen || saving.current) return
-    const current = protection.settings.protected
-    const next = inProtected ? removeProtected(current, relPath) : addProtected(current, relPath)
     saving.current = true
     setError(null)
     try {
-      const saved = await window.canonball.setProtectedPaths(at, next)
+      const saved = await window.canonball.changeProtection(at, kind, relPath)
       setProtectionState({ root: at, protection: saved })
     } catch (e) {
       setError(message(e))

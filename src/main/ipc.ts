@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, nativeTheme, safeStorage, BrowserWindow } from 'e
 import { basename, join } from 'path'
 import { stat } from 'fs/promises'
 import { createProject, listTree, readDoc, requireCurrentRoot, writeDoc } from './projectFs'
-import { loadProjectProtection, setProtectedPaths } from './projectSettings'
+import { changeProtection, loadProjectProtection, setProtectedPaths } from './projectSettings'
 import { showTreeMenu } from './treeMenu'
 import { createSettingsStore, type SettingsStore } from './appSettings'
 import { parseLintRequest } from './grammar/grammarService'
@@ -144,6 +144,16 @@ export function registerIpc(grammar: { lint(texts: string[]): Promise<GrammarLin
     }
     return setProtectedPaths(r, paths)
   })
+  ipcMain.handle(
+    'canonball:changeProtection',
+    (_e, root: string, kind: unknown, relPath: unknown) => {
+      const r = requireCurrentRoot(currentRoot, root)
+      if ((kind !== 'protect' && kind !== 'unprotect') || typeof relPath !== 'string') {
+        throw new Error('Invalid argument')
+      }
+      return changeProtection(r, kind, relPath)
+    }
+  )
   ipcMain.handle('canonball:showTreeMenu', (e, kind: unknown) => {
     if (kind !== 'protect' && kind !== 'unprotect') throw new Error('Invalid argument')
     const win = parentOf(e)
