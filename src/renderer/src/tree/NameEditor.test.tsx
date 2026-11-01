@@ -6,10 +6,10 @@ import { NameEditor } from './NameEditor'
 
 afterEach(cleanup)
 
-it('selects only the stem when renaming a file', () => {
-  render(<NameEditor initial="ch.md" selectStem onSubmit={vi.fn()} onCancel={vi.fn()} />)
+it('selects the whole name when renaming', () => {
+  render(<NameEditor initial="ch" selectStem onSubmit={vi.fn()} onCancel={vi.fn()} />)
   const input = screen.getByRole('textbox') as HTMLInputElement
-  expect(input.value).toBe('ch.md')
+  expect(input.value).toBe('ch')
   expect(input.selectionStart).toBe(0)
   expect(input.selectionEnd).toBe(2)
 })
@@ -38,4 +38,11 @@ it('Escape cancels', () => {
   render(<NameEditor initial="x" selectStem={false} onSubmit={vi.fn()} onCancel={onCancel} />)
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
   expect(onCancel).toHaveBeenCalled()
+})
+
+it('ignores Enter during IME composition', () => {
+  const onSubmit = vi.fn().mockResolvedValue(null)
+  render(<NameEditor initial="x" selectStem={false} onSubmit={onSubmit} onCancel={vi.fn()} />)
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', isComposing: true })
+  expect(onSubmit).not.toHaveBeenCalled()
 })

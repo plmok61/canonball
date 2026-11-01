@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { nameError } from '../../../shared/fileNames'
 
 interface Props {
+  /** Text shown in the box; for a file, the name without `.md`. */
   initial: string
+  /** Select all of `initial` on open (rename), so typing replaces it. */
   selectStem: boolean
   /** Resolves to an error message (the box stays open) or null (it closes). */
   onSubmit(name: string): Promise<string | null>
@@ -18,8 +20,7 @@ export function NameEditor({ initial, selectStem, onSubmit, onCancel }: Props): 
     const el = input.current
     if (!el) return
     el.focus()
-    const dot = initial.lastIndexOf('.')
-    el.setSelectionRange(0, selectStem && dot > 0 ? dot : initial.length)
+    if (selectStem) el.setSelectionRange(0, initial.length)
     // Select once, when the box opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -57,7 +58,7 @@ export function NameEditor({ initial, selectStem, onSubmit, onCancel }: Props): 
         onKeyDown={(e) => {
           // Keep typing from reaching the tree's keyboard shortcuts.
           e.stopPropagation()
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
             e.preventDefault()
             void submit()
           } else if (e.key === 'Escape') {

@@ -94,8 +94,8 @@ function Rows({
         const renaming = editing?.mode === 'rename' && editing.relPath === n.relPath
         const label = renaming ? (
           <NameEditor
-            initial={n.name}
-            selectStem={n.kind === 'file'}
+            initial={n.kind === 'file' ? n.name.replace(/\.md$/i, '') : n.name}
+            selectStem
             onSubmit={ctx.onEditSubmit}
             onCancel={ctx.onEditCancel}
           />

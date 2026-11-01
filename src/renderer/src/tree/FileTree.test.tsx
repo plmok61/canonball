@@ -214,7 +214,7 @@ it('renders a name box for a new entry at the top of its folder', () => {
 
 it('renders a name box in place of the row being renamed', () => {
   render(<FileTree {...base} editing={{ mode: 'rename', relPath: 'README.md' }} />)
-  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('README.md')
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('README')
   expect(screen.queryByText('README')).toBeNull()
 })
 
