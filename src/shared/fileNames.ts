@@ -9,9 +9,13 @@ export function nameError(name: string): string | null {
   return null
 }
 
-/** Adds `.md` unless the name already ends in it (any case). */
+/**
+ * Ends the name in lower-case `.md`: adds it when missing and lower-cases one
+ * typed in any case ("Notes.MD" becomes "Notes.md"), since the tree lists only
+ * `.md` files.
+ */
 export function withMd(name: string): string {
-  return /\.md$/i.test(name) ? name : name + '.md'
+  return (/\.md$/i.test(name) ? name.slice(0, -3) : name) + '.md'
 }
 
 /** `name` if free, else the first of `<base> copy`, `<base> copy 2`, ... that is. */

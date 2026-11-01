@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   checkedPath,
   createEntry,
+  duplicateEntries,
   moveExact,
   pasteEntries,
   removeCreated,
@@ -61,6 +62,13 @@ describe('createEntry', () => {
     expect((await fs.stat(at('book'))).isDirectory()).toBe(true)
   })
 
+  it('lower-cases a typed .MD so the tree lists the file', async () => {
+    const out = await createEntry(root, 'file', '', 'Notes.MD')
+    expect(out.relPath).toBe('Notes.md')
+    expect(await fs.readdir(root)).toEqual(['Notes.md'])
+    expect(out.tree.map((n) => n.name)).toEqual(['Notes.md'])
+  })
+
   it('refuses an existing name', async () => {
     await put('drafts/a.md', 'keep')
     await expect(createEntry(root, 'file', 'drafts', 'a')).rejects.toThrow('"a.md" already exists')
@@ -75,6 +83,22 @@ describe('renameEntry', () => {
     expect(out.move).toEqual({ from: 'drafts/ch.md', to: 'drafts/Ch.md' })
     expect(await fs.readdir(at('drafts'))).toEqual(['Ch.md'])
     expect(await fs.readFile(at('drafts/Ch.md'), 'utf8')).toBe('text')
+  })
+
+  it('a rename to .MD lands at lower-case .md and stays in the tree', async () => {
+    await put('b.md', 'B')
+    const out = await renameEntry(root, 'b.md', 'c.MD')
+    expect(out.move).toEqual({ from: 'b.md', to: 'c.md' })
+    expect(await fs.readdir(root)).toEqual(['c.md'])
+    expect(out.tree.map((n) => n.name)).toEqual(['c.md'])
+  })
+
+  it('an on-disk .MD renamed to .md takes the case-only path', async () => {
+    await put('c.MD', 'C')
+    const out = await renameEntry(root, 'c.MD', 'c.md')
+    expect(out.move).toEqual({ from: 'c.MD', to: 'c.md' })
+    expect(await fs.readdir(root)).toEqual(['c.md'])
+    expect(await fs.readFile(at('c.md'), 'utf8')).toBe('C')
   })
 
   it('rename refuses an existing name', async () => {
@@ -154,6 +178,15 @@ describe('pasteEntries', () => {
     const out = await pasteEntries(root, 'move', ['a/x.md'], 'a')
     expect(out.moves).toEqual([])
     expect(await fs.readdir(at('a'))).toEqual(['x.md'])
+  })
+})
+
+describe('duplicateEntries', () => {
+  it('a copy of an outside-made X.MD keeps its extension', async () => {
+    await put('X.MD', 'x')
+    const out = await duplicateEntries(root, ['X.MD'])
+    expect(out.created).toEqual(['X copy.MD'])
+    expect(await fs.readFile(at('X copy.MD'), 'utf8')).toBe('x')
   })
 })
 

@@ -15,9 +15,11 @@ describe('nameError', () => {
 })
 
 describe('withMd', () => {
-  it('adds .md only when missing, case-insensitively', () => {
+  it('adds .md when missing and lower-cases one already there, never doubling it', () => {
     expect(withMd('ch')).toBe('ch.md')
-    expect(withMd('ch.MD')).toBe('ch.MD')
+    expect(withMd('ch.md')).toBe('ch.md')
+    expect(withMd('Notes.MD')).toBe('Notes.md')
+    expect(withMd('Notes.Md')).toBe('Notes.md')
   })
 })
 
@@ -25,6 +27,9 @@ describe('copyName', () => {
   it('numbers copies and keeps .md for files', () => {
     expect(copyName('x.md', 'file', (n) => ['x.md', 'x copy.md'].includes(n))).toBe('x copy 2.md')
     expect(copyName('notes', 'folder', (n) => n === 'notes')).toBe('notes copy')
+  })
+  it('keeps an existing non-lower-case extension made outside the app', () => {
+    expect(copyName('X.MD', 'file', (n) => n === 'X.MD')).toBe('X copy.MD')
   })
   it('returns the name itself when free', () => {
     expect(copyName('x.md', 'file', () => false)).toBe('x.md')
