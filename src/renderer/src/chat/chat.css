@@ -1,0 +1,267 @@
+.cb-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cb-chat-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cb-chat-pickers {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cb-chat-pickers select {
+  width: 100%;
+  min-width: 0;
+}
+
+.cb-chat-gear {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cb-chat-brainstorm {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cb-chat-brainstorm:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.cb-session-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-chat);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.cb-session-goal {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cb-session-ended {
+  color: var(--text-muted);
+}
+
+.cb-session-banner button {
+  flex: none;
+}
+
+.cb-session-start {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cb-session-start textarea {
+  resize: none;
+  font: inherit;
+}
+
+.cb-session-start-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cb-chat-model-errors {
+  margin: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.cb-chat-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.cb-chat-empty {
+  margin: auto 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.cb-chat-empty p {
+  margin: 0 0 8px;
+}
+
+.cb-chat-msg {
+  max-width: 90%;
+  overflow-wrap: anywhere;
+}
+
+.cb-chat-user {
+  align-self: flex-end;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--active);
+  color: var(--active-text);
+  white-space: pre-wrap;
+}
+
+.cb-chat-reply {
+  align-self: flex-start;
+  color: var(--text);
+}
+
+.cb-chat-reply p,
+.cb-chat-reply ul,
+.cb-chat-reply ol {
+  margin: 0 0 6px;
+}
+
+.cb-chat-reply ul,
+.cb-chat-reply ol {
+  padding-left: 18px;
+}
+
+.cb-chat-reply h3,
+.cb-chat-reply h4,
+.cb-chat-reply h5,
+.cb-chat-reply h6 {
+  margin: 8px 0 4px;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.cb-chat-reply code {
+  padding: 0 3px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.cb-chat-waiting {
+  color: var(--text-muted);
+}
+
+.cb-chat-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  color: var(--accent-warn);
+  font-size: 12px;
+}
+
+.cb-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cb-chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  font: inherit;
+}
+
+/* AI suggestion cards: the card sits on the page colour, inside the chat panel's own. */
+.cb-proposal {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.cb-proposal-title {
+  margin: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.cb-diff {
+  max-height: 260px;
+  padding: 4px 0;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cb-diff > * {
+  display: block;
+  min-height: 1.5em;
+  padding: 0 8px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: pre-wrap;
+}
+
+.cb-diff .cb-diff-add {
+  background: var(--add-bg);
+}
+
+.cb-diff .cb-diff-del {
+  background: var(--del-bg);
+  text-decoration: line-through;
+}
+
+.cb-diff .cb-diff-gap {
+  color: var(--text-muted);
+}
+
+.cb-proposal-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cb-proposal-outcome {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cb-proposal-error {
+  margin: 0;
+  color: var(--accent-warn);
+  font-size: 12px;
+}

@@ -1,15 +1,14 @@
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
-import { isProsePath } from '../../../shared/paths'
 
 type Level = 0 | 1 | 2 | 3
 
 export function Toolbar({
   editor,
-  relPath
+  isProtected
 }: {
   editor: Editor
-  relPath: string
+  isProtected: boolean
 }): React.JSX.Element {
   const s = useEditorState({
     editor,
@@ -59,7 +58,7 @@ export function Toolbar({
       {btn('Bullet list', s.bullet, () => editor.chain().focus().toggleBulletList().run())}
       {btn('Numbered list', s.ordered, () => editor.chain().focus().toggleOrderedList().run())}
       {btn('Scene break', false, () => editor.chain().focus().setHorizontalRule().run())}
-      {isProsePath(relPath) && <span className="cb-draft-banner">Draft — AI won&apos;t edit</span>}
+      {isProtected && <span className="cb-protected-banner">Protected — AI won&apos;t edit</span>}
     </div>
   )
 }

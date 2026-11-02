@@ -18,12 +18,20 @@ it('File menu sends Open Project and New Project to the renderer', () => {
   expect(send.mock.calls).toEqual([['open-project'], ['new-project']])
 })
 
+it('File menu has Settings with Cmd+,', () => {
+  const send = vi.fn()
+  const all = items(buildMenuTemplate({ isMac: true, isDev: false, send }))
+  const settings = all.find((i) => i.label === 'Settings…')!
+  expect(settings.accelerator).toBe('CmdOrCtrl+,')
+  ;(settings.click as () => void)()
+  expect(send).toHaveBeenCalledWith('open-settings')
+})
+
 it('keeps the standard edit roles so editor shortcuts keep working', () => {
   const roles = items(buildMenuTemplate({ isMac: false, isDev: false, send: vi.fn() })).map(
     (i) => i.role
   )
-  for (const role of ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])
-    expect(roles).toContain(role)
+  for (const role of ['cut', 'copy', 'paste', 'selectAll']) expect(roles).toContain(role)
   expect(roles).toContain('windowMenu')
 })
 
@@ -39,4 +47,17 @@ it('never offers a reload, which would drop unsaved text without the flush hands
   )
   expect(roles).not.toContain('reload')
   expect(roles).not.toContain('forceReload')
+})
+
+it('Edit menu Undo and Redo are custom items that go to the renderer', () => {
+  const send = vi.fn()
+  const all = items(buildMenuTemplate({ isMac: true, isDev: false, send }))
+  const undo = all.find((i) => i.label === 'Undo')!
+  const redo = all.find((i) => i.label === 'Redo')!
+  expect(undo.accelerator).toBe('CmdOrCtrl+Z')
+  expect(redo.accelerator).toBe('Shift+CmdOrCtrl+Z')
+  ;(undo.click as () => void)()
+  ;(redo.click as () => void)()
+  expect(send).toHaveBeenCalledWith('undo')
+  expect(send).toHaveBeenCalledWith('redo')
 })

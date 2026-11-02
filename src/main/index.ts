@@ -1,6 +1,6 @@
 import { app, dialog, shell, BrowserWindow, ipcMain, Menu, utilityProcess } from 'electron'
 import { join } from 'path'
-import { applyStoredTheme, registerIpc } from './ipc'
+import { applyStoredTheme, cancelAllChats, flushCurrentTrash, registerIpc } from './ipc'
 import { createCloseHandler, type FlushResult } from './closeFlush'
 import { buildMenuTemplate } from './menu'
 import { buildContextMenuTemplate } from './contextMenu'
@@ -11,6 +11,8 @@ import grammarWorkerPath from './grammar/grammarWorker?modulePath'
 import icon from '../../resources/icon.png?asset'
 
 let quitting = false
+// Before-quit can't await, so the holding-area flush cancels the quit and re-issues it (as the close handler does).
+let trashFlushed = false
 
 const grammar = createGrammarService(() =>
   utilityProcess.fork(grammarWorkerPath, [], { serviceName: 'Canonball Grammar' })
@@ -69,9 +71,13 @@ function createWindow(): void {
       isQuitting: () => quitting,
       cancelQuit: () => {
         quitting = false
+        trashFlushed = false
       }
     })
   )
+
+  // Closing the window stops any streaming reply.
+  mainWindow.on('closed', cancelAllChats)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -109,7 +115,14 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('before-quit', () => {
+app.on('before-quit', (e) => {
+  if (!trashFlushed) {
+    e.preventDefault()
+    trashFlushed = true
+    // flushCurrentTrash never rejects, so quit is never blocked for good.
+    void flushCurrentTrash().then(() => app.quit())
+    return
+  }
   quitting = true
 })
 
@@ -123,7 +136,9 @@ app.whenReady().then(async () => {
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+    // zoom: true — without it the toolkit swallows Cmd/Ctrl+Minus (and
+    // Cmd/Ctrl+Shift+=) before the View menu's zoom accelerators see them.
+    optimizer.watchWindowShortcuts(window, { zoom: true })
   })
 
   registerIpc(grammar)

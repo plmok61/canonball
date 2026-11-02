@@ -10,6 +10,7 @@ import {
   resolveInside,
   writeDoc
 } from './projectFs'
+import { DEFAULT_PROJECT_SETTINGS, parseProjectSettings } from '../shared/protection'
 import type { TreeNode } from '../shared/types'
 
 let tmp: string
@@ -85,6 +86,18 @@ describe('createProject', () => {
     await fs.access(path.join(target, 'canon', 'characters.md'))
     await fs.access(path.join(target, 'memory', 'style_rules.md'))
     await expect(fs.access(path.join(target, 'CLAUDE.md'))).rejects.toThrow()
+    expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toBe(
+      '.canonball/chats/\n.canonball/trash/\n'
+    )
+  })
+
+  it('createProject writes default AI permissions', async () => {
+    const target = path.join(tmp, 'book')
+    await createProject(target, templateDir)
+    const raw = JSON.parse(
+      await fs.readFile(path.join(target, '.canonball', 'project.json'), 'utf8')
+    )
+    expect(parseProjectSettings(raw)).toEqual(DEFAULT_PROJECT_SETTINGS)
     expect(await fs.readFile(path.join(target, '.gitignore'), 'utf8')).toContain(
       '.canonball/chats/'
     )

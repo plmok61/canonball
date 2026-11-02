@@ -22,6 +22,7 @@ export function buildMenuTemplate({
         accelerator: 'CmdOrCtrl+Shift+N',
         click: () => send('new-project')
       },
+      { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('open-settings') },
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit' }
     ]
@@ -45,8 +46,9 @@ export function buildMenuTemplate({
     {
       label: 'Edit',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        // Routed by focus in the renderer: file undo in the tree, native text undo elsewhere.
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
+        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('redo') },
         { type: 'separator' },
         { role: 'cut' },
         { role: 'copy' },

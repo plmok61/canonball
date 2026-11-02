@@ -22,10 +22,11 @@ Electron + React + TypeScript, built with electron-vite. Editor: TipTap (free, o
 - New-project scaffold copied for each new writer project: `template/` (`canon/`, `notes/`, `outline/`, `drafts/`, `sessions/`, `memory/`)
 - AI-isms reference material: `docs/reference/`
 - `examples/` holds sample material; leave it alone.
+- Unattended phase runner: `scripts/run-phases.sh` (logs in `.overnight/`, parked questions in `NEEDS_INPUT.md`). Review a run with the `review-overnight-run` skill.
 
 ## Hard rules
 
-- **The AI never edits prose folders** (`drafts/` today; configurable prose folders arrive in Phase 3). No continue-writing, rewrite-selection, or ghost-text features, ever. Every AI edit elsewhere is shown to the writer for Accept/Reject.
+- **The AI never edits protected files** (the writer's drafts and anything else they protect). No continue-writing, rewrite-selection, or ghost-text features, ever. Every AI edit elsewhere is shown to the writer for Accept/Reject.
 - The app never writes a file the writer didn't change.
 - The renderer touches the disk only through `window.canonball`. Every project-relative path is resolved inside the project root (`resolveInside`), and escapes are rejected.
 - `contextIsolation: true`, `nodeIntegration: false`.

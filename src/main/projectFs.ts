@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import fs from 'fs'
 import { promises as fsp } from 'fs'
 import path from 'path'
+import { DEFAULT_PROJECT_SETTINGS } from '../shared/protection'
 import type { DocFile, TreeNode } from '../shared/types'
 
 const ESCAPE_MSG = 'Path escapes project'
@@ -86,5 +87,15 @@ export async function createProject(targetDir: string, templateDir: string): Pro
   }
   await fsp.mkdir(targetDir, { recursive: true })
   await fsp.cp(templateDir, targetDir, { recursive: true })
-  await fsp.writeFile(path.join(targetDir, '.gitignore'), '.canonball/chats/\n', 'utf8')
+  await fsp.writeFile(
+    path.join(targetDir, '.gitignore'),
+    '.canonball/chats/\n.canonball/trash/\n',
+    'utf8'
+  )
+  await fsp.mkdir(path.join(targetDir, '.canonball'), { recursive: true })
+  await writeDoc(
+    targetDir,
+    '.canonball/project.json',
+    JSON.stringify(DEFAULT_PROJECT_SETTINGS, null, 2) + '\n'
+  )
 }

@@ -45,17 +45,9 @@ It starts as the author's own tool and will be open-sourced for other writers. T
 
 A mockup was reviewed and approved in shape (`.superpowers/brainstorm/…/layout-v2-dark.html`).
 
-**Left: project tree.** It shows the project's folders and files. Every folder and file has an AI-permission badge:
+**Left: project tree.** It shows the project's folders and files, with protected entries marked (see AI permissions below; the left column layout is in `2026-11-01-protected-files-design.md`). Files are shown by name, without the `.md` extension.
 
-| Badge | Meaning |
-|---|---|
-| ✎ | AI can read and edit |
-| 👁 | AI can read only |
-| ⊘ | AI can't see it |
-
-Clicking a badge cycles it. A file inherits its folder's setting unless it has its own override. A small legend sits at the bottom of the tree. Files are shown by name, without the `.md` extension.
-
-**Center: editor.** A page-like WYSIWYG editor with a serif body font and a comfortable line length. The toolbar has bold, italic, headings, block quote, lists, and scene break (saved as a markdown horizontal rule). A status bar shows the file path, word count, and save state. Saving is automatic. When a draft is open, a banner says "Draft — AI won't edit." Spelling and grammar issues show as underlines, with suggestions on click or right-click.
+**Center: editor.** A page-like WYSIWYG editor with a serif body font and a comfortable line length. The toolbar has bold, italic, headings, block quote, lists, and scene break (saved as a markdown horizontal rule). A status bar shows the file path, word count, and save state. Saving is automatic. When a protected file is open, a banner says "Protected — AI won't edit." Spelling and grammar issues show as underlines, with suggestions on click or right-click.
 
 **Non-prose markdown** *(Claude's call)*: YAML front matter is kept exactly as it is but hidden in the editor. HTML comments are kept exactly as they are and shown as faint, non-editable hint text, because the template files use them as fill-in guidance (e.g. "One sentence: job title, company…") and hiding them would leave a new project's canon files looking empty. Neither is editable in this version. Tables (TipTap's free table extension) and links can be both displayed and edited. The markdown round trip must never drop or rewrite content the editor doesn't understand.
 
@@ -65,26 +57,15 @@ Clicking a badge cycles it. A file inherits its folder's setting unless it has i
 
 ## AI permissions
 
-Defaults for a project (folder level):
+One rule *(superseded the earlier per-folder edit / read-only / hidden setting; see `2026-11-01-protected-files-design.md`)*:
 
-| Folder | Default | Notes |
-|---|---|---|
-| `canon/` | read & edit | |
-| `notes/` | read & edit | AI may create new files here |
-| `outline/` | read only | |
-| `drafts/` | read only | **Edit is never available**, a hard rule rather than a setting. Read access lets the AI answer continuity questions ("did I already say her eyes were grey?"). The writer can set drafts to ⊘. |
-| `sessions/` | read & edit | Needed so the AI can write session logs |
-| `memory/` | read only | Project memory and style rules (below) |
+- The AI can **read** every available file in the project: `.md` files only, and nothing under dot-folders (`.canonball/`, `.git/`…) or `node_modules`. Read access lets the AI answer continuity questions ("did I already say her eyes were grey?").
+- The AI can **never edit or create** anything **protected**. A protected entry is a folder (and everything under it) or a single file. `drafts/` is protected by default. In a project that doesn't follow the scaffold (prose in `manuscript/` or at the top level), the writer protects those folders or files too.
+- Everything else can be edited, and the AI may create new files there. It may **not** delete, rename, or move files in this version. Every edit and every new file is an Accept/Reject card.
 
-Permissions are stored in a settings file inside the project folder (e.g. `.canonball/project.json`), so they travel with the project.
+The protected list is stored in `.canonball/project.json` (`{ "version": 2, "protected": ["drafts"] }`), so it travels with the project. In a folder opened with no `.canonball/` settings, the app asks once which folders to protect. An unreadable settings file refuses every AI edit until it's fixed.
 
-The hard rule on drafts is enforced in the app's file-access layer, not just in the prompt. Even if a model tries, the app refuses any write to a prose folder.
-
-**Prose folders** *(Claude's call)*. The no-AI-edit rule attaches to a folder marked as **prose**, not to a hard-coded path. `drafts/` is marked prose by default. In a project that doesn't follow the scaffold (prose in `manuscript/` or at the top level), the writer marks those folders as prose from the tree. A prose folder can be 👁 or ⊘ but never ✎.
-
-**Unlisted folders and top-level files** *(Claude's call)*: these default to 👁 read-only. In a folder opened with no `.canonball/` settings, everything defaults to 👁, and the app asks once which folders hold prose.
-
-**What ✎ allows** *(Claude's call)*. In a ✎ folder the AI may edit existing files and create new ones, `canon/` included. It may **not** delete, rename, or move files in this version. A file-level ✎ inside a 👁 folder lets the AI edit that file but not create files next to it. Every edit and every new file is an Accept/Reject card.
+The rule is enforced in the app's file-access layer, not just in the prompt. Even if a model tries, the app refuses any write to a protected file, however the path is spelled.
 
 ## Connecting the AI
 
@@ -93,7 +74,7 @@ The hard rule on drafts is enforced in the app's file-access layer, not just in 
   2. **Local server URL:** any OpenAI-compatible endpoint, e.g. Ollama at `http://localhost:11434` or LM Studio.
 - The model is chosen from a dropdown in the chat panel.
 - API keys are stored in the macOS Keychain (Electron `safeStorage` or equivalent), never in the project folder.
-- The AI reaches files through tools the app provides (list files, read file, propose edit, create note), so whole projects aren't sent with every message. Only files whose permissions allow it are visible to these tools.
+- The AI reaches files through tools the app provides (list files, read file, propose edit, create note), so whole projects aren't sent with every message. Every available file is visible to these tools; protected ones are read only.
 - For local models without tool-calling support, the app falls back to putting the readable files (or as many as fit) directly into the prompt, and edits come back as proposals the writer accepts.
 
 ## Brainstorm sessions (carried over from v1)
@@ -104,7 +85,7 @@ The hard rule on drafts is enforced in the app's file-access layer, not just in 
 - The AI then offers to move locked-in decisions into `canon/`, one Accept/Reject card per change.
 - A new session automatically reads the previous session's "Next Session" section.
 
-**Where chats live** *(Claude's call)*. Chat threads, brainstorm transcripts included, are saved inside the project under `.canonball/chats/`, so reopening a project brings them back and they move with the folder. New projects get a `.gitignore` entry for `.canonball/chats/`, because transcripts can quote files later hidden with ⊘. The written session log in `sessions/` is the durable record.
+**Where chats live** *(Claude's call)*. Chat threads, brainstorm transcripts included, are saved inside the project under `.canonball/chats/`, so reopening a project brings them back and they move with the folder. New projects get a `.gitignore` entry for `.canonball/chats/`, because transcripts quote the writer's drafts. The written session log in `sessions/` is the durable record.
 
 ## Style rules and names to avoid
 
