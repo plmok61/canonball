@@ -7,3 +7,4 @@ out/
 dist/
 .eslintcache
 *.tsbuildinfo
+.env
