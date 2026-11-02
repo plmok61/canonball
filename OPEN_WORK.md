@@ -80,6 +80,10 @@ Work on the Canonball desktop app that isn't done yet. Move items to `COMPLETED_
   - Known gap: the orphaned-autosave race. Before a rename, move or trash of the open file, the app calls `flushAll()`. Then the Editor (keyed by root and path) unmounts, and any unsaved autosave is handed to `saveRegistry.orphan` under the old path. The window is one IPC round-trip, so this is very unlikely. The fix belongs in Editor/saveRegistry: re-key or drop the orphan when its path moves or is trashed.
     - (a) If the writer types after `flushAll` but before a file rename or trash returns, the orphan's retry `writeDoc` can recreate the old path.
     - (b) After a folder rename, the orphan's write to the old path fails and retries forever, and the new editor never adopts its text, because `settleOrphan` is keyed by the new path.
+  - Known gap: redo of a move can drop a protection entry (`src/renderer/src/tree/history.ts`, `reverse`). This under-protects, so fix it before relying on it.
+    - Example: the writer moves `notes/a.md` to `x/a.md`, then protects `notes` and `x/a.md` from the Protected panel. Those changes go through `setProtectedPaths`, which pushes no history step. On undo, the file moves back and `x/a.md` folds into `notes`. `moveExact` returns `folded: ['x/a.md']`, but `reverse` throws it away. On redo, the file moves to `x/a.md` again with nothing protecting it, so the AI can edit it.
+    - Fix: when undoing, store `r.folded` on the step. On redo, pass it to `moveExact` as `restoreProtected`. It passes main's check, because each entry is at or under redo's `to`. Add tests in `history.test.ts` and `fileOps.test.ts`.
+  - Accepted: if a put-back fails during a trash rollback (two failures in a row), the item stays in `.canonball/trash/` with its protection entry still listed. Nothing is lost, but the error doesn't say where the item is.
 
 ## Decide later (after using the app)
 
